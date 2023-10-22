@@ -12,6 +12,7 @@ use tokio::{
 };
 
 use tracing::{debug, error, info, info_span, Instrument};
+use tracing_subscriber;
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
 
@@ -86,7 +87,7 @@ async fn run(args: Args) -> Result<()> {
 
     let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(server_crypto));
     let transfer_config = Arc::get_mut(&mut server_config.transport).unwrap();
-    transfer_config.max_concurrent_uni_streams(0_u8.into());
+    transfer_config.max_concurrent_uni_streams(5_u8.into());
     if args.stateless_retry {
         server_config.use_retry(true);
     }
@@ -197,20 +198,22 @@ async fn process_request(printer: &String, recv: RecvStream) -> Result<Vec<u8>> 
             }
         }
     }
+    extension = extension.replace("\"", "");
+    debug!("Entension: {}", extension);
 
     // Create temp file
     let temp_name = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
     let dir = format!("/tmp/{}.{}", temp_name, extension);
     let mut file = File::create(dir.clone()).await?;
-    debug!(file = format!("{}.{}", temp_name, extension));
+    debug!(file = dir);
 
     // Copy body to file
     tokio::io::copy(&mut reader, &mut file).await?;
     debug!("Successfully copied to file");
 
     // Print
-    let result = Command::new("lp")
-        .arg(format!("-d {}", printer))
+    debug!(printer = printer);
+    let result = Command::new("lpr")
         .arg(dir)
         .output()
         .await?;
@@ -219,7 +222,7 @@ async fn process_request(printer: &String, recv: RecvStream) -> Result<Vec<u8>> 
     if result.status.success() {
         Ok(b"done".to_vec())
     } else {
-        bail!("{:?}", result)
+        bail!("{:?}", String::from_utf8(result.stderr).unwrap())
     }
 }
 
@@ -267,7 +270,7 @@ async fn parse_cert(
         Ok((cert_chain, key))
     } else {
         let dirs =
-            directories_next::ProjectDirs::from("com", "native_cognitive", "remote_print").unwrap();
+            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         let path = dirs.data_local_dir();
         let cert_path = path.join("cert.der");
         let key_path = path.join("key.der");

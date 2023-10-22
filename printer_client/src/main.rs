@@ -9,8 +9,9 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
-use tracing::{error, info};
-use tracing_subscriber::fmt::format;
+use tokio::{fs::File, io::AsyncReadExt};
+use tracing::{error, info, debug};
+use tracing_subscriber;
 use url::Url;
 
 #[derive(Parser, Debug)]
@@ -29,11 +30,7 @@ struct Args {
     #[clap(long = "ca")]
     ca: Option<PathBuf>,
 
-    /// Simulate NAT rebinding after connecting
-    #[clap(long = "rebind")]
-    rebind: bool,
-
-    #[clap(long = "file")]
+    #[clap(short, long = "file")]
     file: PathBuf,
 }
 
@@ -65,11 +62,13 @@ async fn run(args: Args) -> Result<()> {
         .next()
         .ok_or_else(|| anyhow!("Couldn't resolve to an address"))?;
 
+    // Parse for TLS Certs
     let mut roots = rustls::RootCertStore::empty();
     if let Some(ca_path) = args.ca {
         roots.add(&rustls::Certificate(fs::read(ca_path)?))?;
     } else {
-        let dirs = directories_next::ProjectDirs::from("org", "quinn", "quinn-examples").unwrap();
+        let dirs =
+            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         match fs::read(dirs.data_local_dir().join("cert.der")) {
             Ok(cert) => {
                 roots.add(&rustls::Certificate(cert))?;
@@ -83,6 +82,7 @@ async fn run(args: Args) -> Result<()> {
         }
     }
 
+    // TLS
     let mut client_crypto = rustls::ClientConfig::builder()
         .with_safe_defaults()
         .with_root_certificates(roots)
@@ -92,25 +92,36 @@ async fn run(args: Args) -> Result<()> {
         client_crypto.key_log = Arc::new(rustls::KeyLogFile::new());
     }
 
+    // Establish config and endpoint
     let client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
-    let mut endpoint = quinn::Endpoint::client("[::]:0".parse().unwrap())?;
+    let mut endpoint = quinn::Endpoint::client("[::]:44536".parse().unwrap())?;
     endpoint.set_default_client_config(client_config);
 
+    // Parse headers and file
     let headers = Vec::from([
-        format!("POST {:?}", args.file.file_name()),
+        format!("POST {:?}", args.file.file_name().unwrap()),
         format!("Content-Length: {}", args.file.metadata().unwrap().len()),
-        format!("Extension: {:?}", args.file.extension()),
+        format!("Extension: {:?}", args.file.extension().unwrap()),
+        format!("\r\n"),
     ])
     .join("\r\n");
 
+    let mut buf = Vec::new();
+    File::open(args.file).await?.read_to_end(&mut buf).await?;
+
+    // convert request to binary
+    let mut request = headers.into_bytes();
+    request.extend(buf);
+
+    // Start Timer, get host name
     let start = Instant::now();
-    let rebind = args.rebind;
     let host = args
         .host
         .as_ref()
         .map_or_else(|| url.host_str(), |x| Some(x))
         .ok_or_else(|| anyhow!("no hostname specified"))?;
 
+    // Establish connection
     eprintln!("Connecting to {host} at {remote}");
     let conn = endpoint
         .connect(remote, host)?
@@ -118,24 +129,17 @@ async fn run(args: Args) -> Result<()> {
         .map_err(|e| anyhow!("Failed to connect: {}", e))?;
     eprintln!("Connected at {:?}", start.elapsed());
 
+    // Parse Reader & Writer
     let (mut send, mut recv) = conn
         .open_bi()
         .await
         .map_err(|e| anyhow!("Failed to open stream: {}", e))?;
 
-    // Nat rebinding (Idk what it does)
-    if rebind {
-        let socket = std::net::UdpSocket::bind("[::]:0").unwrap();
-        let addr = socket.local_addr().unwrap();
-        eprintln!("rebinding to {addr}");
-        endpoint.rebind(socket).expect("rebind failed");
-    }
-
-    // Send Headers
-    send.write_all(&headers.as_bytes())
+    // Send off request
+    send.write_all(&request)
         .await
         .map_err(|e| anyhow!("Failed to send request: {}", e))?;
-    
+
     send.finish()
         .await
         .map_err(|e| anyhow!("failed to shut down stream: {}", e))?;
