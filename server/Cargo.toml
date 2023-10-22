@@ -1,0 +1,19 @@
+[package]
+name = "remote_print"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.75"
+clap = { version = "4.4.6", features = ["derive"] }
+directories-next = "2.0.0"
+quinn = "0.10.2"
+rand = "0.8.5"
+rcgen = { version = "0.11.3", features = ["zeroize"] }
+rustls = "0.21.7"
+rustls-pemfile = "1.0.3"
+tokio = { version = "1.33.0", features = ["full"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

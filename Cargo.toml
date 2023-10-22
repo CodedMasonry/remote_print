@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "server",
+    "printer_client",
+    
+]
+default-members = [
+    "server",
+]
+
+workspace.resolver = 2
