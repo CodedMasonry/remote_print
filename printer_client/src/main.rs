@@ -1,10 +1,9 @@
 use std::{
     fs,
-    io::{self, Write},
+    io,
     net::ToSocketAddrs,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Result};
@@ -81,6 +80,17 @@ async fn run(args: Args) -> Result<()> {
             }
         }
     }
+    roots.add_trust_anchors(
+        webpki_roots::TLS_SERVER_ROOTS
+            .iter()
+            .map(|ta| {
+                rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                    ta.subject,
+                    ta.spki,
+                    ta.name_constraints,
+                )
+            })
+    );
 
     // TLS
     let mut client_crypto = rustls::ClientConfig::builder()
@@ -113,8 +123,7 @@ async fn run(args: Args) -> Result<()> {
     let mut request = headers.into_bytes();
     request.extend(buf);
 
-    // Start Timer, get host name
-    let start = Instant::now();
+    // Resolve host name
     let host = args
         .host
         .as_ref()
@@ -127,7 +136,7 @@ async fn run(args: Args) -> Result<()> {
         .connect(remote, host)?
         .await
         .map_err(|e| anyhow!("Failed to connect: {}", e))?;
-    eprintln!("Connected at {:?}", start.elapsed());
+    debug!("Connected to server");
 
     // Parse Reader & Writer
     let (mut send, mut recv) = conn
@@ -145,28 +154,16 @@ async fn run(args: Args) -> Result<()> {
         .map_err(|e| anyhow!("failed to shut down stream: {}", e))?;
 
     // Read response
-    let response_start = Instant::now();
-    eprintln!("request sent at {:?}", response_start - start);
     let resp = recv
         .read_to_end(usize::max_value())
         .await
         .map_err(|e| anyhow!("failed to read response: {}", e))?;
-    let duration = response_start.elapsed();
-    eprintln!(
-        "response received in {:?} - {} KiB/s",
-        duration,
-        resp.len() as f32 / (duration_secs(&duration) * 1024.0)
-    );
+    eprintln!("Successfully sent file");
+    println!("{}", String::from_utf8(resp).unwrap());
 
-    io::stdout().write_all(&resp).unwrap();
-    io::stdout().flush().unwrap();
     conn.close(0u32.into(), b"done");
 
     endpoint.wait_idle().await;
 
     Ok(())
-}
-
-fn duration_secs(x: &Duration) -> f32 {
-    x.as_secs() as f32 + x.subsec_nanos() as f32 * 1e-9
 }

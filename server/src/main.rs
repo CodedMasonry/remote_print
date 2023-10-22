@@ -215,6 +215,8 @@ async fn process_request(printer: &String, recv: RecvStream) -> Result<Vec<u8>> 
     debug!(printer = printer);
     let result = Command::new("lpr")
         .arg(dir)
+        .arg("-P")
+        .arg(printer)
         .output()
         .await?;
 
