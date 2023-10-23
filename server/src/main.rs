@@ -18,22 +18,19 @@ const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
 
 #[derive(Parser, Debug)]
 struct Args {
-    /// Log TLS keys (Not Recommended)
-    #[clap(long = "keylog")]
-    keylog: bool,
     /// TLS private key in PEM format
     #[clap(short = 'k', long = "key", requires = "cert")]
     key: Option<PathBuf>,
+
     /// TLS certificate in PEM format
     #[clap(short = 'c', long = "cert", requires = "key")]
     cert: Option<PathBuf>,
-    /// Enable stateless retries
-    #[clap(long = "stateless-retry")]
-    stateless_retry: bool,
+
     /// Address to listen on
     #[clap(long = "listen", default_value = "[::1]:4433")]
     listen: SocketAddr,
-    /// Printer to use (Run "lpstat -p -d" to see possible printers)
+
+    /// Printer to use; If not set, uses default
     #[arg(short, long)]
     printer: Option<String>,
 }
@@ -61,36 +58,18 @@ async fn run(args: Args) -> Result<()> {
     let (cert, key) = parse_cert(args.key, args.cert).await?;
     debug!("Certificate and Key Parsed Successfully");
 
-    let printer = if args.printer.is_none() {
-        let printers = String::from_utf8(Command::new("lpstat").arg("-p").output().await?.stdout)?;
-        let printers: Vec<&str> = printers
-            .lines()
-            .map(|e| e.split(" ").nth(1).unwrap())
-            .collect();
-        error!(
-            "Please specify a printer, Here are available printers: \n{:#?}",
-            printers
-        );
-        std::process::exit(-1);
-    } else {
-        Arc::new(args.printer.unwrap().clone())
-    };
+    let printer = Arc::new(args.printer.clone());
 
     let mut server_crypto = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
         .with_single_cert(cert, key)?;
     server_crypto.alpn_protocols = ALPN_QUIC_HTTP.iter().map(|&x| x.into()).collect();
-    if args.keylog {
-        server_crypto.key_log = Arc::new(rustls::KeyLogFile::new());
-    }
 
     let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(server_crypto));
     let transfer_config = Arc::get_mut(&mut server_config.transport).unwrap();
     transfer_config.max_concurrent_uni_streams(5_u8.into());
-    if args.stateless_retry {
-        server_config.use_retry(true);
-    }
+    server_config.use_retry(true);
 
     let endpoint = quinn::Endpoint::server(server_config, args.listen)?;
     eprintln!("Listening on {}", endpoint.local_addr()?);
@@ -108,7 +87,7 @@ async fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
-async fn handle_connection(printer: Arc<String>, conn: quinn::Connecting) -> Result<()> {
+async fn handle_connection(printer: Arc<Option<String>>, conn: quinn::Connecting) -> Result<()> {
     let connection = conn.await?;
     let span = info_span!(
         "connection",
@@ -155,13 +134,15 @@ async fn handle_connection(printer: Arc<String>, conn: quinn::Connecting) -> Res
 }
 
 async fn handle_request(
-    printer: Arc<String>,
+    printer: Arc<Option<String>>,
     (mut send, recv): (quinn::SendStream, quinn::RecvStream),
 ) -> Result<()> {
-    let resp = process_request(&printer, recv).await.unwrap_or_else(|e| {
-        error!("Failed: {}", e);
-        format!("Failed to process request: {e}\n").into_bytes()
-    });
+    let resp = process_request(printer.as_ref(), recv)
+        .await
+        .unwrap_or_else(|e| {
+            error!("Failed: {}", e);
+            format!("Failed to process request: {e}\n").into_bytes()
+        });
 
     // Write result of handling and send finish
     send.write_all(&resp)
@@ -175,7 +156,7 @@ async fn handle_request(
     Ok(())
 }
 
-async fn process_request(printer: &String, recv: RecvStream) -> Result<Vec<u8>> {
+async fn process_request(printer: &Option<String>, recv: RecvStream) -> Result<Vec<u8>> {
     let mut reader = BufReader::new(recv);
     let mut name = String::new();
     loop {
@@ -186,6 +167,7 @@ async fn process_request(printer: &String, recv: RecvStream) -> Result<Vec<u8>> 
     }
 
     let mut extension = String::new();
+    let mut request_context = String::new();
     let linesplit = name.split("\n");
     // Parse some headers
     for l in linesplit {
@@ -196,9 +178,27 @@ async fn process_request(printer: &String, recv: RecvStream) -> Result<Vec<u8>> 
                     extension = s.trim().parse::<String>().unwrap(); //Get Content-Length
                 }
             }
+        } else if l.starts_with("POST") {
+            request_context = String::from("print")
+        } else if l.starts_with("GET") && l.contains("auth") {
+            request_context = String::from("auth")
         }
     }
-    extension = extension.replace("\"", "");
+
+    if request_context == String::from("print") {
+        print_file(printer, reader, extension).await
+    } else if request_context == String::from("auth") {
+        auth_user().await
+    } else {
+        bail!("Invalid Request")
+    }
+}
+
+async fn print_file(
+    printer: &Option<String>,
+    mut reader: BufReader<RecvStream>,
+    extension: String,
+) -> Result<Vec<u8>> {
     debug!("Entension: {}", extension);
 
     // Create temp file
@@ -213,19 +213,43 @@ async fn process_request(printer: &String, recv: RecvStream) -> Result<Vec<u8>> 
 
     // Print
     debug!(printer = printer);
-    let result = Command::new("lpr")
-        .arg(dir)
-        .arg("-P")
-        .arg(printer)
-        .output()
-        .await?;
+    let result = if printer.is_some() {
+        Command::new("lpr")
+            .arg(dir)
+            .arg("-P")
+            .arg(printer.as_ref().unwrap())
+            .output()
+            .await?
+    } else {
+        // Use Default
+        Command::new("lpr").arg(dir).output().await?
+    };
 
     // If success, return done, else, return output
     if result.status.success() {
         Ok(b"done".to_vec())
     } else {
-        bail!("{:?}", String::from_utf8(result.stderr).unwrap())
+        let err = String::from_utf8(result.stderr).unwrap();
+        // If no printer was found, notify User
+        if err.contains("not exist") {
+            let printers =
+                String::from_utf8(Command::new("lpstat").arg("-p").output().await?.stdout)?;
+            let printers: Vec<&str> = printers
+                .lines()
+                .map(|e| e.split(" ").nth(1).unwrap())
+                .collect();
+            error!(
+                "Please specify a printer or set a default printer, Here are available printers: \n{:#?}",
+                printers
+            );
+        }
+
+        bail!("{:?}", err)
     }
+}
+
+async fn auth_user() -> Result<Vec<u8>> {
+    bail!("Not implemented")
 }
 
 // Parse cert and keys
