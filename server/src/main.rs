@@ -151,7 +151,6 @@ async fn handle_request(
     send.finish()
         .await
         .map_err(|e| anyhow!("failed to shutdown stream: {}", e))?;
-    info!("complete");
 
     Ok(())
 }

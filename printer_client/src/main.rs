@@ -1,13 +1,10 @@
-use std::{
-    fs, io,
-    net::{SocketAddr, ToSocketAddrs},
-    path::PathBuf,
-    sync::Arc,
-};
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+use std::{fs, io, net::ToSocketAddrs, path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use quinn::ClientConfig;
+use printer_client::app::Interface;
+use quinn;
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::{debug, error, info};
 use tracing_subscriber;
@@ -17,17 +14,13 @@ use url::Url;
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Args {
-    /// Wether to use CLI (If false, uses GUI)
-    #[arg(short, long)]
-    cli: bool,
-
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Adds files to myapp
+    /// Upload to remote printer
     Upload {
         url: Url,
 
@@ -43,6 +36,9 @@ enum Commands {
         #[arg(short, long = "file")]
         file: PathBuf,
     },
+
+    /// Open the GUI
+    Gui {},
 }
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
@@ -52,42 +48,43 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
-    let code = {
-        if let Err(e) = run(args) {
-            eprintln!("ERROR: {e}");
-            1
-        } else {
-            0
-        }
-    };
-
-    std::process::exit(code);
-}
-
-// main func
-#[tokio::main]
-async fn run(args: Args) -> Result<()> {
-    match &args.command {
+    match args.command {
         Commands::Upload {
             url,
             host,
             ca,
             file,
-        } => send_file(url, host, ca, file).await?,
+        } => {
+            tokio::spawn(async move { send_file(url, host, ca, file).await });
+        }
+
+        Commands::Gui {} => run_gui()?,
     };
 
-    run_gui().await
+    Ok(())
 }
 
-async fn run_gui() -> Result<()> {
+fn run_gui() -> Result<()> {
+    let options = eframe::NativeOptions {
+        initial_window_size: Some([400.0, 300.0].into()),
+        min_window_size: Some([300.0, 220.0].into()),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Remote Print",
+        options,
+        Box::new(|_cc| Box::<Interface>::default()),
+    )
+    .unwrap_or_else(|e| error!("Failed to run GUI: {}", e));
+
     Ok(())
 }
 
 async fn send_file(
-    url: &Url,
-    host: &Option<String>,
-    ca: &Option<PathBuf>,
-    file: &PathBuf,
+    url: Url,
+    host: Option<String>,
+    ca: Option<PathBuf>,
+    file: PathBuf,
 ) -> Result<()> {
     let remote = (url.host_str().unwrap(), url.port().unwrap_or(4433))
         .to_socket_addrs()?
