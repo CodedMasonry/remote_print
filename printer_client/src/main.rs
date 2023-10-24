@@ -55,7 +55,7 @@ fn main() -> Result<()> {
             ca,
             file,
         } => {
-            tokio::spawn(async move { send_file(url, host, ca, file).await });
+            send_file(url, host, ca, file)?;
         }
 
         Commands::Gui {} => run_gui()?,
@@ -81,6 +81,7 @@ fn run_gui() -> Result<()> {
     Ok(())
 }
 
+#[tokio::main]
 async fn send_file(
     url: Url,
     host: Option<String>,
