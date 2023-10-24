@@ -66,8 +66,9 @@ fn main() -> Result<()> {
 
 fn run_gui() -> Result<()> {
     let options = eframe::NativeOptions {
-        initial_window_size: Some([400.0, 300.0].into()),
-        min_window_size: Some([300.0, 220.0].into()),
+        initial_window_size: Some([400.0, 500.0].into()),
+        min_window_size: Some([300.0, 400.0].into()),
+        drag_and_drop_support: true,
         ..Default::default()
     };
     eframe::run_native(
