@@ -11,6 +11,11 @@ pub enum Page {
     RemovePrinter,
 }
 
+pub enum Crud {
+    Remove,
+    Add,
+}
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct Interface {
@@ -18,19 +23,17 @@ pub struct Interface {
     dropped_files: Vec<egui::DroppedFile>,
     current_page: Page,
     settings: Settings,
+
+    carry: String, // Insturctions to carry to next iteration
+    string: String,
+    error: String,
+
+    selected_printer: String,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct Settings {
-    username: String,
-    key: String,                           // Encryption key
-    encrypted_settings: EncryptedSettings, // Settings intended to be handled securely
-    carry: Option<String>,                 // Insturctions to carry to next iteration
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-struct EncryptedSettings {
-    printers: HashMap<String, String>,
+    printers: HashMap<String, String>, // Settings intended to be handled securely
 }
 
 impl Default for Interface {
@@ -39,7 +42,13 @@ impl Default for Interface {
             picked_path: None,
             dropped_files: Vec::new(),
             current_page: Page::Home,
-            settings: Settings::parse("username".to_string(), "key".to_string()),
+            settings: Settings::parse(),
+
+            carry: String::new(),
+            string: String::new(),
+            error: String::new(),
+
+            selected_printer: None,
         }
     }
 }
@@ -60,24 +69,28 @@ impl Interface {
 }
 
 impl Settings {
-    fn parse(username: String, key: String) -> Self {
-        let mut encrypted_settings = EncryptedSettings {
-            printers: HashMap::new(),
-        };
+    fn parse() -> Self {
+        let mut printers = HashMap::new();
 
-        encrypted_settings
-            .printers
-            .insert("Test1".to_string(), "Test1".to_string());
+        printers.insert("Test1".to_string(), "Test1".to_string());
 
-        encrypted_settings
-            .printers
-            .insert("SomeLongName".to_string(), "A very long name".to_string());
+        printers.insert("SomeLongName".to_string(), "A very long name".to_string());
 
-        Settings {
-            username,
-            key,
-            encrypted_settings,
-            carry: None,
+        Settings { printers }
+    }
+
+    fn update(&mut self, crud: Crud, key: String, value: Option<String>) {
+        match crud {
+            Crud::Remove => {
+                self.printers.remove(&key);
+            }
+            Crud::Add => {
+                if let Some(val) = value {
+                    self.printers.insert(key, val);
+                } else {
+                    panic!("Attempted to add to settings with no value");
+                }
+            }
         }
     }
 }
@@ -170,12 +183,25 @@ impl Interface {
                 }
             });
 
+            if &self.settings.printers.len() > 0 {
+                let selected = self.selected_printer;
+
+                egui::ComboBox::from_label("Printer Selected")
+                    .selected_text(format!("{selected:?}"))
+                    .show_ui(ui, |ui| {
+                        ui.style_mut().wrap = Some(false);
+                        ui.set_min_width(60.0);
+
+                        for key in self.settings.printers.keys() {
+                            ui.selectable_value(&mut self.selected_printer, key.clone(), key);
+                        }
+                    });
+            } else {
+                ui.label("Please add a printer in settings");
+            }
+
             ui.separator();
             ui.add_space(16.0);
-
-            ui.collapsing("Click to see what is hidden!", |ui| {
-                ui.label("Not much, as it turns out");
-            });
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
@@ -192,13 +218,13 @@ impl Interface {
                     .color(egui::Color32::from_rgb(255, 255, 255)),
             );
             ui.group(|ui| {
-                if self.settings.encrypted_settings.printers.len() != 0 {
-                    for printer in self.settings.encrypted_settings.printers.clone().keys() {
+                if self.settings.printers.len() != 0 {
+                    for printer in self.settings.printers.clone().keys() {
                         ui.horizontal(|ui| {
                             ui.label(printer);
                             ui.add_space(3.0);
                             if ui.button("Remove").clicked() {
-                                self.settings.carry = Some(printer.to_string());
+                                self.carry = printer.to_string();
                                 self.current_page = Page::RemovePrinter;
                             }
                         });
@@ -216,18 +242,6 @@ impl Interface {
             }
 
             ui.separator();
-            ui.collapsing(
-                egui::RichText::new("General Info")
-                    .heading()
-                    .color(egui::Color32::from_rgb(255, 255, 255)),
-                |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.label("Username: ");
-                        ui.label(RichText::new(&self.settings.username).color(Color32::GREEN));
-                    });
-                },
-            );
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
@@ -237,7 +251,8 @@ impl Interface {
     }
 
     fn remove_printer(&mut self, ctx: &Context) {
-        if let Some(instruction) = self.settings.carry.clone() {
+        let instruction = self.carry.clone();
+        if !instruction.is_empty() {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.label(RichText::from("Are You Sure you wish to remove this printer?").heading());
                 ui.label(
@@ -250,17 +265,16 @@ impl Interface {
 
                 ui.horizontal(|ui| {
                     if ui.add_sized([80., 30.], egui::Button::new("Yes")).clicked() {
-                        self.settings
-                            .encrypted_settings
-                            .printers
-                            .remove(&instruction);
+                        self.settings.update(Crud::Remove, instruction, None);
                         self.current_page = Page::Settings;
+                        self.carry = String::new();
                     }
 
                     ui.add_space(20.);
 
                     if ui.add_sized([80., 30.], egui::Button::new("No")).clicked() {
                         self.current_page = Page::Settings;
+                        self.carry = String::new();
                     }
                 });
             });
@@ -271,6 +285,68 @@ impl Interface {
 
     fn new_printer(&mut self, ctx: &Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label(RichText::new("Add a Printer"));
+
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut self.string).hint_text("IP Address"));
+                ui.label("Remote IP");
+            });
+
+            ui.add_space(20.);
+
+            ui.horizontal(|ui| {
+                password_ui(ui, &mut self.carry);
+                ui.label("Password");
+            });
+
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                if ui
+                    .add_sized([80., 30.], egui::Button::new("Done"))
+                    .clicked()
+                {
+                    if !self.carry.is_empty() && !self.string.is_empty() {
+                        if !self.settings.printers.contains_key(&self.string) {
+                            self.settings.update(
+                                Crud::Add,
+                                self.string.clone(),
+                                Some(self.carry.clone()),
+                            );
+
+                            self.current_page = Page::Settings;
+                            self.carry = String::new();
+                            self.string = String::new();
+                            self.error = String::new();
+                        } else {
+                            self.error = String::from("Printer already added");
+                        }
+                    } else {
+                        self.error = String::from("Missing Input");
+                    }
+                }
+
+                ui.add_space(20.);
+
+                if ui
+                    .add_sized([80., 30.], egui::Button::new("Cancel"))
+                    .clicked()
+                {
+                    self.current_page = Page::Settings;
+                    self.carry = String::new();
+                    self.string = String::new();
+                }
+            });
+
+            if !self.error.is_empty() {
+                ui.label(
+                    RichText::new(self.error.clone())
+                        .color(Color32::RED)
+                        .strong(),
+                );
+            }
         });
     }
 }
@@ -321,7 +397,6 @@ fn preview_files_being_dropped(ctx: &egui::Context) {
     }
 }
 
-
 // Credit: https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/password.rs
 #[allow(clippy::ptr_arg)] // false positive
 pub fn password_ui(ui: &mut egui::Ui, password: &mut String) -> egui::Response {
@@ -340,7 +415,14 @@ pub fn password_ui(ui: &mut egui::Ui, password: &mut String) -> egui::Response {
     // Process ui, change a local copy of the state
     // We want TextEdit to fill entire space, and have button after that, so in that case we can
     // change direction to right_to_left.
-    let result = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+    let result = ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        // Show the password field:
+        ui.add(
+            egui::TextEdit::singleline(password)
+                .password(!show_plaintext)
+                .hint_text("Password"),
+        );
+
         // Toggle the `show_plaintext` bool with a button:
         let response = ui
             .add(egui::SelectableLabel::new(show_plaintext, "👁"))
@@ -349,12 +431,6 @@ pub fn password_ui(ui: &mut egui::Ui, password: &mut String) -> egui::Response {
         if response.clicked() {
             show_plaintext = !show_plaintext;
         }
-
-        // Show the password field:
-        ui.add_sized(
-            ui.available_size(),
-            egui::TextEdit::singleline(password).password(!show_plaintext),
-        );
     });
 
     // Store the (possibly changed) state:
