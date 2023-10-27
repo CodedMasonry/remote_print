@@ -52,7 +52,7 @@ pub async fn send_file(
 
     // Establish config
     let client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
-    let mut endpoint = quinn::Endpoint::client("[::]:44536".parse().unwrap())?;
+    let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse().unwrap())?;
     endpoint.set_default_client_config(client_config);
 
     // Parse headers and file

@@ -1,4 +1,5 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, time::{Instant, Duration}};
+use url::Url;
 
 use egui::{
     ahash::{HashMap, HashMapExt},
@@ -18,8 +19,6 @@ pub enum Crud {
     Add,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)]
 pub struct Interface {
     picked_path: Option<String>,
     dropped_files: Vec<egui::DroppedFile>,
@@ -31,6 +30,7 @@ pub struct Interface {
     error: String,
 
     selected_printer: IpAddr,
+    submit_result: Option<(String, Instant)>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -51,6 +51,7 @@ impl Default for Interface {
             error: String::new(),
 
             selected_printer: "0.0.0.0".parse().unwrap(),
+            submit_result: None,
         }
     }
 }
@@ -215,9 +216,36 @@ impl Interface {
                 .clicked()
             {
                 if let Some(file) = &self.picked_path {
+                    let parsed_url =
+                        Url::parse(&format!("https://{}:4433", self.selected_printer)).unwrap();
+
+                    // Handle result of sending file
+                    match crate::send_file(
+                        parsed_url,
+                        Some("localhost".to_string()),
+                        None,
+                        file.into(),
+                    ) {
+                        Ok(_) => {
+                            self.submit_result =
+                                Some(("Successfully printed file".to_string(), Instant::now()))
+                        }
+                        Err(e) => {
+                            self.submit_result =
+                                Some((format!("Failed to print: {:?}", e), Instant::now()))
+                        }
+                    };
                 } else {
                     self.error = String::from("No Send file specified")
                 }
+            }
+
+            if let Some(value) = self.submit_result.clone() {
+                if value.1.elapsed() >= Duration::from_secs(5) {
+                    self.submit_result = None;
+                }
+
+                ui.label(value.0.clone());
             }
 
             if !self.error.is_empty() {
