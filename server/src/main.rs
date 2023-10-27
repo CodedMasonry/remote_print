@@ -27,7 +27,7 @@ struct Args {
     cert: Option<PathBuf>,
 
     /// Address to listen on
-    #[clap(long = "listen", default_value = "[::1]:4433")]
+    #[clap(short, long = "listen", default_value = "0.0.0.0:4433")]
     listen: SocketAddr,
 
     /// Printer to use; If not set, uses default

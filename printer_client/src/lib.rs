@@ -18,6 +18,7 @@ pub async fn send_file(
     ca: Option<PathBuf>,
     file: PathBuf,
 ) -> Result<()> {
+
     let remote = (url.host_str().unwrap(), url.port().unwrap_or(4433))
         .to_socket_addrs()?
         .next()
@@ -112,6 +113,12 @@ pub async fn send_file(
     conn.close(0u32.into(), b"done");
 
     endpoint.wait_idle().await;
+
+    Ok(())
+}
+
+pub fn read_settings() -> Result<()> {
+    let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
 
     Ok(())
 }

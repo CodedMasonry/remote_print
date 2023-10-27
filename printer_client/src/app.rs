@@ -34,7 +34,7 @@ pub struct Interface {
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-struct Settings {
+pub struct Settings {
     printers: HashMap<IpAddr, String>, // Settings intended to be handled securely
 }
 
