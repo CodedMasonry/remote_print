@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use egui::{
     ahash::{HashMap, HashMapExt},
     Color32, Context, RichText,
@@ -28,12 +30,12 @@ pub struct Interface {
     string: String,
     error: String,
 
-    selected_printer: String,
+    selected_printer: IpAddr,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct Settings {
-    printers: HashMap<String, String>, // Settings intended to be handled securely
+    printers: HashMap<IpAddr, String>, // Settings intended to be handled securely
 }
 
 impl Default for Interface {
@@ -48,7 +50,7 @@ impl Default for Interface {
             string: String::new(),
             error: String::new(),
 
-            selected_printer: None,
+            selected_printer: "0.0.0.0".parse().unwrap(),
         }
     }
 }
@@ -70,11 +72,10 @@ impl Interface {
 
 impl Settings {
     fn parse() -> Self {
-        let mut printers = HashMap::new();
+        let mut printers: HashMap<IpAddr, String> = HashMap::new();
 
-        printers.insert("Test1".to_string(), "Test1".to_string());
-
-        printers.insert("SomeLongName".to_string(), "A very long name".to_string());
+        printers.insert("0.0.0.0".parse().unwrap(), "something".to_string());
+        printers.insert("192.168.0.5".parse().unwrap(), "somethingelse".to_string());
 
         Settings { printers }
     }
@@ -82,10 +83,11 @@ impl Settings {
     fn update(&mut self, crud: Crud, key: String, value: Option<String>) {
         match crud {
             Crud::Remove => {
-                self.printers.remove(&key);
+                self.printers.remove(&key.parse().unwrap());
             }
             Crud::Add => {
                 if let Some(val) = value {
+                    let key = key.parse().unwrap();
                     self.printers.insert(key, val);
                 } else {
                     panic!("Attempted to add to settings with no value");
@@ -111,9 +113,11 @@ impl eframe::App for Interface {
 
                     if ui.button("Home").clicked() {
                         self.current_page = Page::Home;
+                        self.error = String::new();
                     }
                     if ui.button("Settings").clicked() {
                         self.current_page = Page::Settings;
+                        self.error = String::new();
                     }
                     ui.add_space(16.0);
                 }
@@ -133,11 +137,15 @@ impl Interface {
                     .color(egui::Color32::from_rgb(255, 255, 255)),
             );
 
-            if ui.button("Open file…").clicked() {
-                if let Some(path) = rfd::FileDialog::new().pick_file() {
-                    self.picked_path = Some(path.display().to_string());
+            ui.horizontal(|ui| {
+                if ui.button("Open file…").clicked() {
+                    if let Some(path) = rfd::FileDialog::new().pick_file() {
+                        self.picked_path = Some(path.display().to_string());
+                    }
                 }
-            }
+
+                ui.label("Selected File")
+            });
 
             if let Some(picked_path) = &self.picked_path {
                 ui.horizontal(|ui| {
@@ -183,21 +191,41 @@ impl Interface {
                 }
             });
 
-            if &self.settings.printers.len() > 0 {
-                let selected = self.selected_printer;
+            ui.add_space(8.0);
+            if &self.settings.printers.len() > &0 {
+                let selected = &self.selected_printer;
 
-                egui::ComboBox::from_label("Printer Selected")
+                egui::ComboBox::from_label("Selected Printer")
                     .selected_text(format!("{selected:?}"))
                     .show_ui(ui, |ui| {
                         ui.style_mut().wrap = Some(false);
                         ui.set_min_width(60.0);
 
                         for key in self.settings.printers.keys() {
-                            ui.selectable_value(&mut self.selected_printer, key.clone(), key);
+                            ui.selectable_value(&mut self.selected_printer, *key, key.to_string());
                         }
                     });
             } else {
                 ui.label("Please add a printer in settings");
+            }
+
+            ui.add_space(8.0);
+            if ui
+                .add_sized([80., 30.], egui::Button::new("Send File"))
+                .clicked()
+            {
+                if let Some(file) = &self.picked_path {
+                } else {
+                    self.error = String::from("No Send file specified")
+                }
+            }
+
+            if !self.error.is_empty() {
+                ui.label(
+                    RichText::new(self.error.clone())
+                        .color(Color32::RED)
+                        .strong(),
+                );
             }
 
             ui.separator();
@@ -221,7 +249,7 @@ impl Interface {
                 if self.settings.printers.len() != 0 {
                     for printer in self.settings.printers.clone().keys() {
                         ui.horizontal(|ui| {
-                            ui.label(printer);
+                            ui.label(printer.to_string());
                             ui.add_space(3.0);
                             if ui.button("Remove").clicked() {
                                 self.carry = printer.to_string();
@@ -308,8 +336,14 @@ impl Interface {
                     .add_sized([80., 30.], egui::Button::new("Done"))
                     .clicked()
                 {
-                    if !self.carry.is_empty() && !self.string.is_empty() {
-                        if !self.settings.printers.contains_key(&self.string) {
+                    let is_valid = &self.string.parse(); // Simply tests if valid address
+
+                    if !self.carry.is_empty() && !self.string.is_empty() && is_valid.is_ok() {
+                        if !self
+                            .settings
+                            .printers
+                            .contains_key(&is_valid.clone().unwrap())
+                        {
                             self.settings.update(
                                 Crud::Add,
                                 self.string.clone(),
@@ -323,6 +357,8 @@ impl Interface {
                         } else {
                             self.error = String::from("Printer already added");
                         }
+                    } else if is_valid.is_err() {
+                        self.error = String::from("Invalid IP Address")
                     } else {
                         self.error = String::from("Missing Input");
                     }
