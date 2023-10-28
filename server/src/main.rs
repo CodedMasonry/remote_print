@@ -55,7 +55,9 @@ fn main() -> Result<()> {
 // main func
 #[tokio::main]
 async fn run(args: Args) -> Result<()> {
-    let (cert, key) = parse_cert(args.key, args.cert).await?;
+    let (cert, key) = remote_print::parse_tls_cert(args.key, args.cert).await?;
+    let _settings = remote_print::Settings::parse().await?;
+
     debug!("Certificate and Key Parsed Successfully");
 
     let printer = Arc::new(args.printer.clone());
@@ -249,84 +251,4 @@ async fn print_file(
 
 async fn auth_user() -> Result<Vec<u8>> {
     bail!("Not implemented")
-}
-
-// Parse cert and keys
-async fn parse_cert(
-    key: Option<PathBuf>,
-    cert: Option<PathBuf>,
-) -> Result<(Vec<Certificate>, PrivateKey)> {
-    if let (Some(key_path), Some(cert_path)) = (key, cert) {
-        let key = fs::read(key_path.clone())
-            .await
-            .context("failed to read private key")?;
-        let key = if key_path.extension().map_or(false, |x| x == "der") {
-            rustls::PrivateKey(key)
-        } else {
-            let pkcs8 = rustls_pemfile::pkcs8_private_keys(&mut &*key)
-                .context("malformed PKCS #8 private key")?;
-            match pkcs8.into_iter().next() {
-                Some(x) => rustls::PrivateKey(x),
-                None => {
-                    let rsa = rustls_pemfile::rsa_private_keys(&mut &*key)
-                        .context("malformed PKCS #1 private key")?;
-                    match rsa.into_iter().next() {
-                        Some(x) => rustls::PrivateKey(x),
-                        None => {
-                            anyhow::bail!("no private keys found");
-                        }
-                    }
-                }
-            }
-        };
-        let cert_chain = fs::read(cert_path.clone())
-            .await
-            .context("failed to read certificate chain")?;
-        let cert_chain = if cert_path.extension().map_or(false, |x| x == "der") {
-            vec![rustls::Certificate(cert_chain)]
-        } else {
-            rustls_pemfile::certs(&mut &*cert_chain)
-                .context("invalid PEM-encoded certificate")?
-                .into_iter()
-                .map(rustls::Certificate)
-                .collect()
-        };
-
-        Ok((cert_chain, key))
-    } else {
-        let dirs =
-            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
-        let path = dirs.data_local_dir();
-        let cert_path = path.join("cert.der");
-        let key_path = path.join("key.der");
-        let (cert, key) = match fs::read(&cert_path)
-            .await
-            .and_then(|x| Ok((x, std::fs::read(&key_path)?)))
-        {
-            Ok(x) => x,
-            Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
-                info!("generating self-signed certificate");
-                let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-                let key = cert.serialize_private_key_der();
-                let cert = cert.serialize_der().unwrap();
-                fs::create_dir_all(path)
-                    .await
-                    .context("failed to create certificate directory")?;
-                fs::write(&cert_path, &cert)
-                    .await
-                    .context("failed to write certificate")?;
-                fs::write(&key_path, &key)
-                    .await
-                    .context("failed to write private key")?;
-                (cert, key)
-            }
-            Err(e) => {
-                bail!("failed to read certificate: {}", e);
-            }
-        };
-
-        let key = rustls::PrivateKey(key);
-        let cert = rustls::Certificate(cert);
-        Ok((vec![cert], key))
-    }
 }

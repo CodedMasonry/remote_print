@@ -224,7 +224,7 @@ impl Interface {
                     // Handle result of sending file
                     match crate::send_file(
                         parsed_url,
-                        Some("printer".to_string()),
+                        Some("localhost".to_string()),
                         None,
                         file.into(),
                     ) {
