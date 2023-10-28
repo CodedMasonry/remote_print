@@ -6,6 +6,8 @@ use egui::{
     Color32, Context, RichText,
 };
 
+use crate::{get_settings, save_settings};
+
 #[derive(serde::Deserialize, serde::Serialize)]
 pub enum Page {
     Home,
@@ -44,7 +46,7 @@ impl Default for Interface {
             picked_path: None,
             dropped_files: Vec::new(),
             current_page: Page::Home,
-            settings: Settings::parse(),
+            settings: get_settings().unwrap(),
 
             carry: String::new(),
             string: String::new(),
@@ -72,11 +74,8 @@ impl Interface {
 }
 
 impl Settings {
-    fn parse() -> Self {
-        let mut printers: HashMap<IpAddr, String> = HashMap::new();
-
-        printers.insert("0.0.0.0".parse().unwrap(), "something".to_string());
-        printers.insert("192.168.0.5".parse().unwrap(), "somethingelse".to_string());
+    pub fn new() -> Self {
+        let printers: HashMap<IpAddr, String> = HashMap::new();
 
         Settings { printers }
     }
@@ -95,6 +94,9 @@ impl Settings {
                 }
             }
         }
+
+        // Save settings
+        save_settings(&self).unwrap();
     }
 }
 
@@ -222,7 +224,7 @@ impl Interface {
                     // Handle result of sending file
                     match crate::send_file(
                         parsed_url,
-                        Some("localhost".to_string()),
+                        Some("printer".to_string()),
                         None,
                         file.into(),
                     ) {

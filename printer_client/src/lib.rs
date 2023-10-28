@@ -1,13 +1,34 @@
 use std::{fs, io, net::ToSocketAddrs, path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, Result};
+use app::Settings;
 use quinn;
+use rustls::Certificate;
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::{debug, error, info};
 use url::Url;
+use lazy_static::lazy_static;
 
 pub mod app;
 
+lazy_static! {
+    static ref DEFAULT_ROOTS: Vec<Certificate> = {
+        let mut temp = Vec::new();
+        let dir_entries = fs::read_dir("../../certs").expect("Failed to read directory");
+
+        for entry in dir_entries {
+            if let Ok(entry) = entry {
+                let file_path = entry.path();
+                if let Ok(file_bytes) = fs::read(&file_path) {
+                    let root_cert = Certificate(file_bytes);
+                    temp.push(root_cert);
+                }
+            }
+        }
+
+        temp
+    };
+}
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
 
@@ -41,6 +62,10 @@ pub async fn send_file(
             Err(e) => {
                 error!("failed to open local server certificate: {}", e);
             }
+        }
+
+        for cert in DEFAULT_ROOTS.clone().into_iter() {
+            roots.add(&cert)?;
         }
     }
 
@@ -117,8 +142,33 @@ pub async fn send_file(
     Ok(())
 }
 
-pub fn read_settings() -> Result<()> {
+pub fn get_settings() -> Result<Settings> {
     let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
 
+    let settings = match fs::read(dirs.data_local_dir().join("settings.json")) {
+        Ok(file) => {
+            let settings: Settings = serde_json::from_slice(&file)?;
+            settings
+        }
+        Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
+            info!("local Settings not found, returning default");
+            Settings::new()
+        }
+        Err(e) => {
+            error!("failed to open settings: {}\nUsing default settings", e);
+            Settings::new()
+        }
+    };
+
+    Ok(settings)
+}
+
+pub fn save_settings(settings: &Settings) -> Result<()> {
+    let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+    let json = serde_json::to_string(&settings)?;
+
+    // Write the json
+    fs::write(dirs.data_local_dir().join("settings.json"), json)?;
+    
     Ok(())
 }
