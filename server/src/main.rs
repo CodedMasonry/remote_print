@@ -1,23 +1,21 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use clap::Parser;
-use orion::pwhash;
 use quinn::RecvStream;
 use rand::distributions::{Alphanumeric, DistString};
-use rustls::{Certificate, PrivateKey};
+use remote_print::Settings;
 use tokio::{
-    fs::{self, File},
-    io::{self, AsyncBufReadExt, BufReader},
+    fs::File,
+    io::{AsyncBufReadExt, BufReader},
     process::Command,
 };
 
 use tracing::{debug, error, info, info_span, Instrument};
 use tracing_subscriber;
+use remote_print;
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
-
-lazy_static::laz
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -59,9 +57,10 @@ fn main() -> Result<()> {
 #[tokio::main]
 async fn run(args: Args) -> Result<()> {
     let (cert, key) = remote_print::parse_tls_cert(args.key, args.cert).await?;
-    let _settings = remote_print::Settings::get_settings().await?;
-
     debug!("Certificate and Key Parsed Successfully");
+
+    let settings = Arc::new(remote_print::Settings::get_settings().await?);
+    debug!("Settings parsed successfully");
 
     let printer = Arc::new(args.printer.clone());
 
@@ -81,7 +80,7 @@ async fn run(args: Args) -> Result<()> {
 
     while let Some(conn) = endpoint.accept().await {
         info!("connection incoming");
-        let handle = handle_connection(printer.clone(), conn);
+        let handle = handle_connection(printer.clone(), settings.clone(), conn);
         tokio::spawn(async move {
             if let Err(e) = handle.await {
                 error!("connection failed: {reason}", reason = e.to_string())
@@ -92,7 +91,11 @@ async fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
-async fn handle_connection(printer: Arc<Option<String>>, conn: quinn::Connecting) -> Result<()> {
+async fn handle_connection(
+    printer: Arc<Option<String>>,
+    settings: Arc<Settings>,
+    conn: quinn::Connecting,
+) -> Result<()> {
     let connection = conn.await?;
     let span = info_span!(
         "connection",
@@ -121,7 +124,7 @@ async fn handle_connection(printer: Arc<Option<String>>, conn: quinn::Connecting
                 }
                 Ok(s) => s,
             };
-            let fut = handle_request(printer.clone(), stream);
+            let fut = handle_request(printer.clone(), settings.clone(), stream);
             tokio::spawn(
                 async move {
                     if let Err(e) = fut.await {
@@ -140,9 +143,10 @@ async fn handle_connection(printer: Arc<Option<String>>, conn: quinn::Connecting
 
 async fn handle_request(
     printer: Arc<Option<String>>,
+    settings: Arc<Settings>,
     (mut send, recv): (quinn::SendStream, quinn::RecvStream),
 ) -> Result<()> {
-    let resp = process_request(printer.as_ref(), recv)
+    let resp = process_request(printer.as_ref(), settings, recv)
         .await
         .unwrap_or_else(|e| {
             error!("Failed: {}", e);
@@ -160,7 +164,11 @@ async fn handle_request(
     Ok(())
 }
 
-async fn process_request(printer: &Option<String>, recv: RecvStream) -> Result<Vec<u8>> {
+async fn process_request(
+    printer: &Option<String>,
+    settings: Arc<Settings>,
+    recv: RecvStream,
+) -> Result<Vec<u8>> {
     let mut reader = BufReader::new(recv);
     let mut name = String::new();
     loop {
@@ -192,7 +200,7 @@ async fn process_request(printer: &Option<String>, recv: RecvStream) -> Result<V
     if request_context == String::from("print") {
         print_file(printer, reader, extension).await
     } else if request_context == String::from("auth") {
-        auth_user().await
+        remote_print::auth_user(&settings.hash, reader).await
     } else {
         bail!("Invalid Request")
     }
@@ -250,12 +258,4 @@ async fn print_file(
 
         bail!("{:?}", err)
     }
-}
-
-async fn auth_user(mut reader: BufReader<RecvStream>,) -> Result<Vec<u8>> {
-    match pwhash::hash_password_verify(, password) {
-        
-    }
-
-    bail!("Not implemented")
 }

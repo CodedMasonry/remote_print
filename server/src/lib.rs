@@ -1,15 +1,45 @@
 use anyhow::{bail, Context, Result};
+use quinn::RecvStream;
 use rustls::{self, Certificate, PrivateKey};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use tracing_subscriber::fmt::format;
+use uuid::Uuid;
 
+use chrono::prelude::*;
+use chrono::Duration;
+use lazy_static::lazy_static;
 use orion::{self, pwhash};
 use serde;
-use tokio::{fs, io};
+use tokio::{
+    fs,
+    io::{self, AsyncReadExt, BufReader},
+    sync::Mutex,
+};
 use tracing::{error, info};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Settings {
-    hash: pwhash::PasswordHash,
+    pub hash: pwhash::PasswordHash,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct Session {
+    pub ttl: DateTime<Utc>,
+}
+
+lazy_static! {
+    // Sessions are not intended to be persistent
+    // Sessions should only last a few hours at maximum
+    pub static ref SESSION_STORAGE: Arc<Mutex<HashMap<Uuid, Session>>> =
+        Arc::new(Mutex::from(HashMap::new()));
+}
+
+impl Session {
+    pub fn new() -> Self {
+        Session {
+            ttl: Utc::now() + Duration::hours(1),
+        }
+    }
 }
 
 impl Settings {
@@ -30,14 +60,16 @@ impl Settings {
                 settings
             }
             Err(e) => {
-                error!("failed to open settings: {}\nUsing default settings (Saving disabled)", e);
+                error!(
+                    "failed to open settings: {}\nUsing default settings (Saving disabled)",
+                    e
+                );
                 Settings::build()?
             }
         };
 
         Ok(settings)
     }
-
     pub async fn save_settings(settings: &Settings) -> Result<()> {
         let dirs =
             directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
@@ -144,4 +176,37 @@ pub async fn parse_tls_cert(
         let cert = rustls::Certificate(cert);
         Ok((vec![cert], key))
     }
+}
+
+pub async fn auth_user(
+    hash: &pwhash::PasswordHash,
+    mut reader: BufReader<RecvStream>,
+) -> Result<Vec<u8>> {
+    let mut pass = String::new();
+    reader.read_to_string(&mut pass).await?;
+
+    let password = pwhash::Password::from_slice(pass.as_bytes())?;
+
+    // Implement fail timeout later
+    // Register session if success, return result of verification
+    match pwhash::hash_password_verify(hash, &password) {
+        Ok(_) => {
+            // Initialize new connection
+            // Generate UUID on server because you should never trust the client
+            let mut lock = SESSION_STORAGE.lock().await;
+            let session_id = Uuid::new_v4();
+            let session = Session::new();
+
+            lock.insert(session_id, session);
+            drop(lock); // Explicit release
+
+            // Success&ID
+            // Designed for client handling
+            let result = format!("success&{}", session_id).as_bytes().to_vec();
+            return Ok(result);
+        }
+        Err(_) => {
+            bail!("Invalid Password");
+        }
+    };
 }
