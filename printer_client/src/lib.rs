@@ -1,36 +1,32 @@
-use std::{fs, io, net::ToSocketAddrs, path::PathBuf, sync::Arc};
+use std::{fs, io, net::ToSocketAddrs, path::PathBuf, str::FromStr, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use app::Settings;
+use chrono::prelude::*;
+use include_dir::{include_dir, Dir};
 use quinn;
 use rustls::Certificate;
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::{debug, error, info};
 use url::Url;
-use lazy_static::lazy_static;
+use uuid::Uuid;
 
 pub mod app;
 
-lazy_static! {
-    static ref DEFAULT_ROOTS: Vec<Certificate> = {
-        let mut temp = Vec::new();
-        let dir_entries = fs::read_dir("../../certs").expect("Failed to read directory");
-
-        for entry in dir_entries {
-            if let Ok(entry) = entry {
-                let file_path = entry.path();
-                if let Ok(file_bytes) = fs::read(&file_path) {
-                    let root_cert = Certificate(file_bytes);
-                    temp.push(root_cert);
-                }
-            }
-        }
-
-        temp
-    };
-}
+static DEFAULT_ROOTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../certs");
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
+
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
+pub struct Printer {
+    pass: String,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct Session {
+    pub id: Uuid,
+    pub expiratrion: DateTime<Utc>,
+}
 
 #[tokio::main]
 pub async fn send_file(
@@ -38,8 +34,8 @@ pub async fn send_file(
     host: Option<String>,
     ca: Option<PathBuf>,
     file: PathBuf,
+    session: Option<Session>
 ) -> Result<()> {
-
     let remote = (url.host_str().unwrap(), url.port().unwrap_or(4433))
         .to_socket_addrs()?
         .next()
@@ -64,7 +60,7 @@ pub async fn send_file(
             }
         }
 
-        for cert in DEFAULT_ROOTS.clone().into_iter() {
+        for cert in parse_certs().await {
             roots.add(&cert)?;
         }
     }
@@ -80,6 +76,12 @@ pub async fn send_file(
     let client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
     let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse().unwrap())?;
     endpoint.set_default_client_config(client_config);
+
+    let session = if let Some(session) = session {
+        session
+    } else {
+        get_session(url, host, ca, pass)
+    };
 
     // Parse headers and file
     let file = file.clone();
@@ -142,6 +144,115 @@ pub async fn send_file(
     Ok(())
 }
 
+#[tokio::main]
+pub async fn get_session(
+    url: Url,
+    host: Option<String>,
+    ca: Option<PathBuf>,
+    pass: String,
+) -> Result<Session> {
+    let remote = (url.host_str().unwrap(), url.port().unwrap_or(4433))
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| anyhow!("Couldn't resolve to an address"))?;
+
+    // Parse for TLS Certs
+    let mut roots = rustls::RootCertStore::empty();
+    if let Some(ca_path) = ca {
+        roots.add(&rustls::Certificate(fs::read(ca_path)?))?;
+    } else {
+        let dirs =
+            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+        match fs::read(dirs.data_local_dir().join("cert.der")) {
+            Ok(cert) => {
+                roots.add(&rustls::Certificate(cert))?;
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
+                info!("local server certificate not found");
+            }
+            Err(e) => {
+                error!("failed to open local server certificate: {}", e);
+            }
+        }
+
+        for cert in parse_certs().await {
+            roots.add(&cert)?;
+        }
+    }
+
+    // TLS
+    let mut client_crypto = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    client_crypto.alpn_protocols = ALPN_QUIC_HTTP.iter().map(|&x| x.into()).collect();
+
+    // Establish config
+    let client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
+    let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse().unwrap())?;
+    endpoint.set_default_client_config(client_config);
+
+    // Parse headers and file
+    let request = Vec::from([format!("GET authenticate"), format!("\r\n")])
+        .join("\r\n")
+        .into_bytes();
+
+    // Resolve host name
+    let host = host
+        .as_ref()
+        .map_or_else(|| url.host_str(), |x| Some(x))
+        .ok_or_else(|| anyhow!("no hostname specified"))?;
+
+    // Establish connection
+    eprintln!("Connecting to {host} at {remote}");
+    let conn = endpoint
+        .connect(remote, host)?
+        .await
+        .map_err(|e| anyhow!("Failed to connect: {}", e))?;
+    debug!("Connected to server");
+
+    // Parse Reader & Writer
+    let (mut send, mut recv) = conn
+        .open_bi()
+        .await
+        .map_err(|e| anyhow!("Failed to open stream: {}", e))?;
+
+    // Send off request
+    send.write_all(&request)
+        .await
+        .map_err(|e| anyhow!("Failed to send request: {}", e))?;
+
+    send.finish()
+        .await
+        .map_err(|e| anyhow!("failed to shut down stream: {}", e))?;
+
+    // Read response
+    let resp = recv
+        .read_to_end(usize::max_value())
+        .await
+        .map_err(|e| anyhow!("failed to read response: {}", e))?;
+    eprintln!("Successfully verified session");
+
+    conn.close(0u32.into(), b"done");
+
+    endpoint.wait_idle().await;
+
+    let resp = String::from_utf8(resp)?;
+    debug!(response = resp);
+
+    let resp: Vec<&str> = resp.split("&").collect();
+    if resp[0] == "success" {
+        let session = Session {
+            id: Uuid::parse_str(resp[1])?,
+            expiratrion: DateTime::from_str(resp[2])?,
+        };
+
+        return Ok(session);
+    } else {
+        bail!("Failed: {}", resp[0])
+    }
+}
+
 pub fn get_settings() -> Result<Settings> {
     let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
 
@@ -169,6 +280,16 @@ pub fn save_settings(settings: &Settings) -> Result<()> {
 
     // Write the json
     fs::write(dirs.data_local_dir().join("settings.json"), json)?;
-    
+
     Ok(())
+}
+
+pub async fn parse_certs() -> Vec<Certificate> {
+    let mut temp = Vec::new();
+    for file in DEFAULT_ROOTS.files() {
+        let root_cert = Certificate(file.contents().to_vec());
+        temp.push(root_cert);
+    }
+
+    temp
 }

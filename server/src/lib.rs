@@ -2,7 +2,6 @@ use anyhow::{bail, Context, Result};
 use quinn::RecvStream;
 use rustls::{self, Certificate, PrivateKey};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use tracing_subscriber::fmt::format;
 use uuid::Uuid;
 
 use chrono::prelude::*;
@@ -17,14 +16,14 @@ use tokio::{
 };
 use tracing::{error, info};
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct Settings {
     pub hash: pwhash::PasswordHash,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct Session {
-    pub ttl: DateTime<Utc>,
+    pub expiratrion: DateTime<Utc>,
 }
 
 lazy_static! {
@@ -37,7 +36,7 @@ lazy_static! {
 impl Session {
     pub fn new() -> Self {
         Session {
-            ttl: Utc::now() + Duration::hours(1),
+            expiratrion: Utc::now() + Duration::hours(1),
         }
     }
 }
@@ -178,14 +177,16 @@ pub async fn parse_tls_cert(
     }
 }
 
-pub async fn auth_user(
+/// Attempts to create a session.
+/// Fails if password doesn't match
+pub async fn init_session(
     hash: &pwhash::PasswordHash,
     mut reader: BufReader<RecvStream>,
 ) -> Result<Vec<u8>> {
-    let mut pass = String::new();
-    reader.read_to_string(&mut pass).await?;
+    let mut pass = Vec::new();
+    reader.read_to_end(&mut pass).await?;
 
-    let password = pwhash::Password::from_slice(pass.as_bytes())?;
+    let password = pwhash::Password::from_slice(&pass)?;
 
     // Implement fail timeout later
     // Register session if success, return result of verification
@@ -197,12 +198,14 @@ pub async fn auth_user(
             let session_id = Uuid::new_v4();
             let session = Session::new();
 
-            lock.insert(session_id, session);
+            lock.insert(session_id, session.clone());
             drop(lock); // Explicit release
 
-            // Success&ID
+            // Success & Id & Expiratrion
             // Designed for client handling
-            let result = format!("success&{}", session_id).as_bytes().to_vec();
+            let result = format!("success&{}&{}", session_id, session.expiratrion)
+                .as_bytes()
+                .to_vec();
             return Ok(result);
         }
         Err(_) => {

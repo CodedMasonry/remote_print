@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
+use chrono::Utc;
 use clap::Parser;
 use quinn::RecvStream;
 use rand::distributions::{Alphanumeric, DistString};
@@ -11,9 +12,10 @@ use tokio::{
     process::Command,
 };
 
+use remote_print;
 use tracing::{debug, error, info, info_span, Instrument};
 use tracing_subscriber;
-use remote_print;
+use uuid::Uuid;
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
 
@@ -179,28 +181,53 @@ async fn process_request(
     }
 
     let mut extension = String::new();
+    let mut session_id = String::new();
     let mut request_context = String::new();
     let linesplit = name.split("\n");
     // Parse some headers
     for l in linesplit {
         if l.starts_with("Extension") {
+            // Extension Header
             let sizeplit = l.split(":");
             for s in sizeplit {
                 if !(s.starts_with("Extension")) {
-                    extension = s.trim().parse::<String>().unwrap(); // Get Extension
+                    extension = s.trim().parse::<String>().unwrap();
+                }
+            }
+        } else if l.starts_with("Session") {
+            // Session Header
+            let sizeplit = l.split(":");
+            for s in sizeplit {
+                if !(s.starts_with("Session")) {
+                    session_id = s.trim().parse::<String>().unwrap();
                 }
             }
         } else if l.starts_with("POST") {
+            // if POST
             request_context = String::from("print")
         } else if l.starts_with("GET") && l.contains("auth") {
+            // if AUTH
             request_context = String::from("auth")
         }
     }
 
     if request_context == String::from("print") {
+        let mut lock = remote_print::SESSION_STORAGE.lock().await;
+        let session_id = Uuid::parse_str(&session_id)?;
+
+        // Checks if session exists
+        if let Some(session) = lock.get(&session_id) {
+            if session.expiratrion < Utc::now() {
+                bail!("Expired Session")
+            }
+        } else {
+            bail!("Authentication Required")
+        }
+
+        drop(lock); // Explicit release
         print_file(printer, reader, extension).await
     } else if request_context == String::from("auth") {
-        remote_print::auth_user(&settings.hash, reader).await
+        remote_print::init_session(&settings.hash, reader).await
     } else {
         bail!("Invalid Request")
     }
