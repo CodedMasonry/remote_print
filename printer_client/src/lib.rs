@@ -19,7 +19,8 @@ const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Printer {
-    pass: String,
+    pub pass: String,
+    pub session: Option<Session>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
@@ -28,13 +29,22 @@ pub struct Session {
     pub expiratrion: DateTime<Utc>,
 }
 
+impl Printer {
+    pub fn new(pass: String) -> Self {
+        Printer {
+            pass,
+            session: None,
+        }
+    }
+}
+
 #[tokio::main]
 pub async fn send_file(
     url: Url,
     host: Option<String>,
     ca: Option<PathBuf>,
     file: PathBuf,
-    session: Option<Session>
+    printer: Option<&mut Printer>,
 ) -> Result<()> {
     let remote = (url.host_str().unwrap(), url.port().unwrap_or(4433))
         .to_socket_addrs()?
@@ -77,10 +87,26 @@ pub async fn send_file(
     let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse().unwrap())?;
     endpoint.set_default_client_config(client_config);
 
-    let session = if let Some(session) = session {
-        session
+    // Parse session
+    let session = if let Some(temp) = printer {
+        if let Some(session) = temp.session {
+            // Session exists
+            if session.expiratrion <= Utc::now() {
+                // Session expired
+                get_session(url, host, ca, temp.pass)?
+            } else {
+                // Session Valid
+                session
+            }
+        } else {
+            // No session exists
+            temp.session = Some(get_session(url, host, ca, temp.pass)?); // Update session
+            temp.session.unwrap()
+        }
     } else {
-        get_session(url, host, ca, pass)
+        // No Printer passed, generate temp session
+        let pass = request_for_pass().await;
+        get_session(url, host, ca, pass)?
     };
 
     // Parse headers and file
@@ -89,6 +115,7 @@ pub async fn send_file(
         format!("POST {:?}", file.file_name().unwrap()),
         format!("Content-Length: {}", file.metadata().unwrap().len()),
         format!("Extension: {:?}", file.extension().unwrap()),
+        format!("Session: {}", session.id),
         format!("\r\n"),
     ])
     .join("\r\n");
@@ -292,4 +319,16 @@ pub async fn parse_certs() -> Vec<Certificate> {
     }
 
     temp
+}
+
+/// Ask the user for the password (CLI Only)
+pub async fn request_for_pass() -> String {
+    let mut pass = String::new();
+
+    print!("Please enter the password: ");
+    std::io::stdin()
+        .read_line(&mut pass)
+        .expect("failed to read line");
+
+    pass
 }

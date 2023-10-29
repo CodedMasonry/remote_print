@@ -6,6 +6,7 @@ members = [
 ]
 default-members = [
     "server",
+    "printer_client"
 ]
 
 workspace.resolver = 2

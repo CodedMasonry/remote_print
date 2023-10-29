@@ -1,4 +1,7 @@
-use std::{net::IpAddr, time::{Instant, Duration}};
+use std::{
+    net::IpAddr,
+    time::{Duration, Instant},
+};
 use url::Url;
 
 use egui::{
@@ -6,7 +9,7 @@ use egui::{
     Color32, Context, RichText,
 };
 
-use crate::{get_settings, save_settings};
+use crate::{get_settings, save_settings, Printer};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub enum Page {
@@ -37,7 +40,7 @@ pub struct Interface {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Settings {
-    printers: HashMap<IpAddr, String>, // Settings intended to be handled securely
+    printers: HashMap<IpAddr, Printer>, // Settings intended to be handled securely
 }
 
 impl Default for Interface {
@@ -75,7 +78,7 @@ impl Interface {
 
 impl Settings {
     pub fn new() -> Self {
-        let printers: HashMap<IpAddr, String> = HashMap::new();
+        let printers: HashMap<IpAddr, Printer> = HashMap::new();
 
         Settings { printers }
     }
@@ -88,7 +91,8 @@ impl Settings {
             Crud::Add => {
                 if let Some(val) = value {
                     let key = key.parse().unwrap();
-                    self.printers.insert(key, val);
+                    let printer = Printer::new(val);
+                    self.printers.insert(key, printer);
                 } else {
                     panic!("Attempted to add to settings with no value");
                 }
@@ -220,6 +224,11 @@ impl Interface {
                 if let Some(file) = &self.picked_path {
                     let parsed_url =
                         Url::parse(&format!("https://{}:4433", self.selected_printer)).unwrap();
+                    let printer_settings = self
+                        .settings
+                        .printers
+                        .get_mut(&self.selected_printer)
+                        .unwrap();
 
                     // Handle result of sending file
                     match crate::send_file(
@@ -227,6 +236,7 @@ impl Interface {
                         Some("localhost".to_string()),
                         None,
                         file.into(),
+                        Some(printer_settings),
                     ) {
                         Ok(_) => {
                             self.submit_result =
