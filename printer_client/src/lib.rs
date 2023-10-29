@@ -332,7 +332,7 @@ pub async fn request_for_pass() -> String {
     let pass = inquire::Password::new("Please enter a password:")
             .with_display_toggle_enabled()
             .with_display_mode(inquire::PasswordDisplayMode::Hidden)
-            .prompt()?;
+            .prompt().unwrap();
 
     pass
 }
