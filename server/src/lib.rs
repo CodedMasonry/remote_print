@@ -24,10 +24,13 @@ impl Settings {
             }
             Err(ref e) if e.kind() == io::ErrorKind::NotFound => {
                 info!("local Settings not found, returning default");
-                Settings::build()?
+                let settings = Settings::build()?;
+
+                Settings::save_settings(&settings).await?;
+                settings
             }
             Err(e) => {
-                error!("failed to open settings: {}\nUsing default settings", e);
+                error!("failed to open settings: {}\nUsing default settings (Saving disabled)", e);
                 Settings::build()?
             }
         };

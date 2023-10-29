@@ -2,6 +2,7 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
+use orion::pwhash;
 use quinn::RecvStream;
 use rand::distributions::{Alphanumeric, DistString};
 use rustls::{Certificate, PrivateKey};
@@ -15,6 +16,8 @@ use tracing::{debug, error, info, info_span, Instrument};
 use tracing_subscriber;
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
+
+lazy_static::laz
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -56,7 +59,7 @@ fn main() -> Result<()> {
 #[tokio::main]
 async fn run(args: Args) -> Result<()> {
     let (cert, key) = remote_print::parse_tls_cert(args.key, args.cert).await?;
-    let _settings = remote_print::Settings::parse().await?;
+    let _settings = remote_print::Settings::get_settings().await?;
 
     debug!("Certificate and Key Parsed Successfully");
 
@@ -176,7 +179,7 @@ async fn process_request(printer: &Option<String>, recv: RecvStream) -> Result<V
             let sizeplit = l.split(":");
             for s in sizeplit {
                 if !(s.starts_with("Extension")) {
-                    extension = s.trim().parse::<String>().unwrap(); //Get Content-Length
+                    extension = s.trim().parse::<String>().unwrap(); // Get Extension
                 }
             }
         } else if l.starts_with("POST") {
@@ -230,7 +233,7 @@ async fn print_file(
     if result.status.success() {
         Ok(b"done".to_vec())
     } else {
-        let err = String::from_utf8(result.stderr).unwrap();
+        let err = String::from_utf8(result.stderr)?;
         // If no printer was found, notify User
         if err.contains("not exist") {
             let printers =
@@ -249,6 +252,10 @@ async fn print_file(
     }
 }
 
-async fn auth_user() -> Result<Vec<u8>> {
+async fn auth_user(mut reader: BufReader<RecvStream>,) -> Result<Vec<u8>> {
+    match pwhash::hash_password_verify(, password) {
+        
+    }
+
     bail!("Not implemented")
 }
