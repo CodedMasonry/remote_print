@@ -327,8 +327,6 @@ pub async fn parse_certs() -> Vec<Certificate> {
 
 /// Ask the user for the password (CLI Only)
 pub async fn request_for_pass() -> String {
-    let mut pass = String::new();
-
     let pass = inquire::Password::new("Please enter a password:")
             .with_display_toggle_enabled()
             .with_display_mode(inquire::PasswordDisplayMode::Hidden)
