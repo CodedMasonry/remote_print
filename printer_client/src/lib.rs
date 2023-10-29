@@ -94,14 +94,14 @@ pub async fn send_file(
             // Session exists
             if session.expiratrion <= Utc::now() {
                 // Session expired
-                get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone())?
+                get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).await?
             } else {
                 // Session Valid
                 session.clone()
             }
         } else {
             // No session exists
-            let session = get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone())?;
+            let session = get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).await?;
 
             temp.session = Some(session.clone()); // Update session
             session
@@ -109,7 +109,7 @@ pub async fn send_file(
     } else {
         // No Printer passed, generate temp session
         let pass = request_for_pass().await;
-        get_session(url.clone(), host.clone(), ca.clone(), pass)?
+        get_session(url.clone(), host.clone(), ca.clone(), pass).await?
     };
 
     // Parse headers and file
@@ -174,7 +174,6 @@ pub async fn send_file(
     Ok(())
 }
 
-#[tokio::main]
 pub async fn get_session(
     url: Url,
     host: Option<String>,
