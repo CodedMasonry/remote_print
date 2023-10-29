@@ -53,7 +53,7 @@ pub async fn send_file(
 
     // Parse for TLS Certs
     let mut roots = rustls::RootCertStore::empty();
-    if let Some(ca_path) = ca {
+    if let Some(ca_path) = ca.clone() {
         roots.add(&rustls::Certificate(fs::read(ca_path)?))?;
     } else {
         let dirs =
@@ -89,24 +89,26 @@ pub async fn send_file(
 
     // Parse session
     let session = if let Some(temp) = printer {
-        if let Some(session) = temp.session {
+        if let Some(session) = &temp.session {
             // Session exists
             if session.expiratrion <= Utc::now() {
                 // Session expired
-                get_session(url, host, ca, temp.pass)?
+                get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone())?
             } else {
                 // Session Valid
-                session
+                session.clone()
             }
         } else {
             // No session exists
-            temp.session = Some(get_session(url, host, ca, temp.pass)?); // Update session
-            temp.session.unwrap()
+            let session = get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone())?;
+
+            temp.session = Some(session.clone()); // Update session
+            session
         }
     } else {
         // No Printer passed, generate temp session
         let pass = request_for_pass().await;
-        get_session(url, host, ca, pass)?
+        get_session(url.clone(), host.clone(), ca.clone(), pass)?
     };
 
     // Parse headers and file
@@ -220,9 +222,10 @@ pub async fn get_session(
     endpoint.set_default_client_config(client_config);
 
     // Parse headers and file
-    let request = Vec::from([format!("GET authenticate"), format!("\r\n")])
-        .join("\r\n")
-        .into_bytes();
+    let headers = Vec::from([format!("GET authenticate"), format!("\r\n")]).join("\r\n");
+
+    let mut request = headers.into_bytes();
+    request.extend(pass.as_bytes());
 
     // Resolve host name
     let host = host

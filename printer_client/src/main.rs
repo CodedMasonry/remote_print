@@ -52,7 +52,7 @@ fn main() -> Result<()> {
             ca,
             file,
         } => {
-            printer_client::send_file(url, host, ca, file)?;
+            printer_client::send_file(url, host, ca, file, None)?;
         }
 
         Commands::Gui {} => run_gui()?,

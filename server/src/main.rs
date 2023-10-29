@@ -212,11 +212,11 @@ async fn process_request(
     }
 
     if request_context == String::from("print") {
-        let mut lock = remote_print::SESSION_STORAGE.lock().await;
-        let session_id = Uuid::parse_str(&session_id)?;
+        let lock = remote_print::SESSION_STORAGE.lock().await;
+        let id = Uuid::parse_str(&session_id)?;
 
         // Checks if session exists
-        if let Some(session) = lock.get(&session_id) {
+        if let Some(session) = lock.get(&id) {
             if session.expiratrion < Utc::now() {
                 bail!("Expired Session")
             }
