@@ -81,12 +81,13 @@ impl Settings {
     }
 
     pub fn build() -> Result<Self> {
-        let mut pass = String::new();
-
-        print!("Please enter a password [Only need to do this once]: ");
-        std::io::stdin()
-            .read_line(&mut pass)
-            .expect("failed to read line");
+        println!("A password is needed for clients to connect");
+        let pass = inquire::Password::new("Please enter a password:")
+            .with_display_toggle_enabled()
+            .with_display_mode(inquire::PasswordDisplayMode::Hidden)
+            .with_custom_confirmation_message("Confirm Password:")
+            .with_custom_confirmation_error_message("Passwords do not match")
+            .prompt()?;
 
         let password = pwhash::Password::from_slice(pass.as_bytes())?;
         drop(pass); // Want the raw password in memory for as little time as possible

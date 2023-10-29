@@ -36,6 +36,10 @@ struct Args {
     /// Printer to use; If not set, uses default
     #[arg(short, long)]
     printer: Option<String>,
+
+    /// Reset password
+    #[arg(long)]
+    reset_password: bool,
 }
 
 // Init tracing
@@ -43,6 +47,16 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
+
+    if args.reset_password {
+        let dirs =
+            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+        match std::fs::remove_file(dirs.data_local_dir().join("server_settings.json")) {
+            Ok(_) => println!("Password reset"),
+            Err(_) => println!("No password was saved"),
+        };
+    }
+
     let code = {
         if let Err(e) = run(args) {
             eprintln!("ERROR: {e}");

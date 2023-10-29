@@ -10,6 +10,7 @@ use tokio::{fs::File, io::AsyncReadExt};
 use tracing::{debug, error, info};
 use url::Url;
 use uuid::Uuid;
+use inquire;
 
 pub mod app;
 
@@ -328,10 +329,10 @@ pub async fn parse_certs() -> Vec<Certificate> {
 pub async fn request_for_pass() -> String {
     let mut pass = String::new();
 
-    print!("Please enter the password: ");
-    std::io::stdin()
-        .read_line(&mut pass)
-        .expect("failed to read line");
+    let pass = inquire::Password::new("Please enter a password:")
+            .with_display_toggle_enabled()
+            .with_display_mode(inquire::PasswordDisplayMode::Hidden)
+            .prompt()?;
 
     pass
 }
