@@ -72,7 +72,7 @@ pub async fn send_file(
         }
 
         for cert in parse_certs().await {
-            debug!("Cert Added");
+            debug!("Cert Added: {:#?}", cert);
             roots.add(&cert)?;
         }
     }
@@ -320,6 +320,7 @@ pub async fn parse_certs() -> Vec<Certificate> {
     let mut temp = Vec::new();
     for file in DEFAULT_ROOTS.files() {
         let root_cert = Certificate(file.contents().to_vec());
+
         temp.push(root_cert);
     }
 
