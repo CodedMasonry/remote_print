@@ -7,7 +7,7 @@ use include_dir::{include_dir, Dir};
 use quinn;
 use rustls::Certificate;
 use tokio::{fs::File, io::AsyncReadExt};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, info_span, Instrument};
 use url::Url;
 use uuid::Uuid;
 use inquire;
@@ -72,6 +72,7 @@ pub async fn send_file(
         }
 
         for cert in parse_certs().await {
+            debug!("Cert Added");
             roots.add(&cert)?;
         }
     }
@@ -94,14 +95,14 @@ pub async fn send_file(
             // Session exists
             if session.expiratrion <= Utc::now() {
                 // Session expired
-                get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).await?
+                get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).instrument(info_span!("Fetch Session")).await?
             } else {
                 // Session Valid
                 session.clone()
             }
         } else {
             // No session exists
-            let session = get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).await?;
+            let session = get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).instrument(info_span!("Fetch Session")).await?;
 
             temp.session = Some(session.clone()); // Update session
             session
@@ -109,7 +110,7 @@ pub async fn send_file(
     } else {
         // No Printer passed, generate temp session
         let pass = request_for_pass().await;
-        get_session(url.clone(), host.clone(), ca.clone(), pass).await?
+        get_session(url.clone(), host.clone(), ca.clone(), pass).instrument(info_span!("Fetch Session")).await?
     };
 
     // Parse headers and file
@@ -205,6 +206,7 @@ pub async fn get_session(
         }
 
         for cert in parse_certs().await {
+            debug!("Root Cert Added from certs directory");
             roots.add(&cert)?;
         }
     }
