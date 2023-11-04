@@ -45,7 +45,7 @@ on:
 jobs:
   # Run 'cargo dist plan' to determine what tasks we need to do
   plan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
       tag: ${{ !github.event.pull_request && github.ref_name || '' }}
@@ -148,7 +148,7 @@ jobs:
   # Create a Github Release with all the results once everything is done
   publish-release:
     needs: [plan, should-publish]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
