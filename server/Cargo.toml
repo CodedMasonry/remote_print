@@ -1,6 +1,6 @@
 
 [package]
-name = "remote_print"
+name = "printer_server"
 version = "0.1.2"
 edition = "2021"
 repository = "https://github.com/CodedMasonry/remote_print"

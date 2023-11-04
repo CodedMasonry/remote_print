@@ -5,14 +5,14 @@ use chrono::Utc;
 use clap::Parser;
 use quinn::RecvStream;
 use rand::distributions::{Alphanumeric, DistString};
-use remote_print::Settings;
+use printer_server::Settings;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
     process::Command,
 };
 
-use remote_print;
+use printer_server;
 use tracing::{debug, error, info, info_span, Instrument};
 use tracing_subscriber;
 use uuid::Uuid;
@@ -72,10 +72,10 @@ fn main() -> Result<()> {
 // main func
 #[tokio::main]
 async fn run(args: Args) -> Result<()> {
-    let (cert, key) = remote_print::parse_tls_cert(args.key, args.cert).await?;
+    let (cert, key) = printer_server::parse_tls_cert(args.key, args.cert).await?;
     debug!("Certificate and Key Parsed Successfully");
 
-    let settings = Arc::new(remote_print::Settings::get_settings().await?);
+    let settings = Arc::new(printer_server::Settings::get_settings().await?);
     debug!("Settings parsed successfully");
 
     let printer = Arc::new(args.printer.clone());
@@ -226,7 +226,7 @@ async fn process_request(
     }
 
     if request_context == String::from("print") {
-        let lock = remote_print::SESSION_STORAGE.lock().await;
+        let lock = printer_server::SESSION_STORAGE.lock().await;
         let id = Uuid::parse_str(&session_id)?;
 
         // Checks if session exists
@@ -241,7 +241,7 @@ async fn process_request(
         drop(lock); // Explicit release
         print_file(printer, reader, extension).await
     } else if request_context == String::from("auth") {
-        remote_print::init_session(&settings.hash, reader).await
+        printer_server::init_session(&settings.hash, reader).await
     } else {
         bail!("Invalid Request")
     }

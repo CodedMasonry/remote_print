@@ -1,5 +1,5 @@
 [package]
-name = "remote_printer_client"
+name = "printer_client"
 version = "0.1.2"
 edition = "2021"
 repository = "https://github.com/CodedMasonry/remote_print"

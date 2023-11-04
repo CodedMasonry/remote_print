@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use remote_printer_client::app::Interface;
+use printer_client::app::Interface;
 
 use tracing::error;
 use tracing_subscriber;
@@ -52,7 +52,7 @@ fn main() -> Result<()> {
             ca,
             file,
         } => {
-            remote_printer_client::send_file(url, host, ca, file, None)?;
+            printer_client::send_file(url, host, ca, file, None)?;
         }
 
         Commands::Gui {} => run_gui()?,
