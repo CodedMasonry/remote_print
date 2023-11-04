@@ -94,6 +94,12 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
     steps:
+      - name: Build dynamic dependencies
+        run: |
+          sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
+          sudo rm -rf /home/linuxbrew
+          sudo apt-get install -y libgtk-3-dev librust-atk-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libclang-dev libatk1.0-0 build-essential
+          echo "Finished installing dynamic dependencies"
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -105,10 +111,6 @@ jobs:
           ${{ matrix.packages_install }}
       - name: Build artifacts
         run: |
-          sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
-          sudo rm -rf /home/linuxbrew
-          sudo apt-get install -y libgtk-3-dev librust-atk-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libclang-dev libatk1.0-0 build-essential
-          echo "Finished installing dynamic dependencies"
           # Actually do builds and make zips and whatnot
           cargo dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "cargo dist ran successfully"
