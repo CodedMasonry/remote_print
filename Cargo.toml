@@ -1,6 +1,7 @@
 repository = "https://github.com/CodedMasonry/remote_print"
 
 [workspace]
+resolver = "2"
 members = [
     "server",
     "printer_client",
