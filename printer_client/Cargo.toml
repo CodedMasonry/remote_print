@@ -1,8 +1,13 @@
 [package]
-name = "printer_client"
+name = "remote_printer_client"
 version = "0.1.1"
 edition = "2021"
 repository = "https://github.com/CodedMasonry/remote_print"
+authors = ["Brock Shaffer <109301662+CodedMasonry@users.noreply.github.com>"]
+license = "MIT"
+description = """
+A backend for running remote printing over the internet, using QUIC + TLS
+"""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
