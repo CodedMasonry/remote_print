@@ -14,7 +14,7 @@ use inquire;
 
 pub mod app;
 
-static DEFAULT_ROOTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../certs");
+static DEFAULT_ROOTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../certs");
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
 
