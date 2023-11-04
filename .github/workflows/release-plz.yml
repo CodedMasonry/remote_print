@@ -18,9 +18,6 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-      
-       - name: Set up cargo cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Install packages (Linux)
         if: runner.os == 'Linux'
