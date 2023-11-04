@@ -54,6 +54,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -103,6 +104,11 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+      - name: Install external dependencies
+        run:  |
+              # Dependencies needed to compile egui
+              sudo apt-get update
+              sudo apt-get install -y libclang-dev libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
