@@ -287,16 +287,15 @@ async fn print_file(
         }
     } else {
         // Use Default (only works if lpr exists)
-        let temp = Command::new("lpr").arg(dir).output().await
+        let temp = Command::new("lpr").arg(dir.clone()).output().await;
         match temp {
             Ok(o) => o,
-            Err(e) => {
-                if e.to_string().contains("found") {
-                    bail!("lpr doesn't exist; recommended passing a printer (-p PRINTER_NAME)");
-                } else {
-                    bail!(e);
-                }
-            },
+            Err(_) => {
+                Command::new("lp")
+                    .arg(dir)
+                    .output()
+                    .await?
+            }
         }
     };
 
