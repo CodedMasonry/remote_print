@@ -14,7 +14,7 @@ use url::Url;
 #[command(propagate_version = true)]
 struct Args {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -35,9 +35,6 @@ enum Commands {
         #[arg(short, long = "file")]
         file: PathBuf,
     },
-
-    /// Open the GUI
-    Gui {},
 }
 
 // Init tracing
@@ -45,19 +42,22 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
-    match args.command {
-        Commands::Upload {
-            url,
-            host,
-            ca,
-            file,
-        } => {
-            printer_client::send_file(url, host, ca, file, None)?;
-        }
 
-        Commands::Gui {} => run_gui()?,
-    };
-
+    if args.command.is_none() {
+        run_gui()?;
+    } else {
+        match args.command.unwrap() {
+            Commands::Upload {
+                url,
+                host,
+                ca,
+                file,
+            } => {
+                printer_client::send_file(url, host, ca, file, None)?;
+                true
+            }
+        };
+    }
     Ok(())
 }
 
