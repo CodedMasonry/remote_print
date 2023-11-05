@@ -3,9 +3,9 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use anyhow::{anyhow, bail, Result};
 use chrono::Utc;
 use clap::Parser;
+use printer_server::Settings;
 use quinn::RecvStream;
 use rand::distributions::{Alphanumeric, DistString};
-use printer_server::Settings;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -267,15 +267,37 @@ async fn print_file(
     // Print
     debug!(printer = printer);
     let result = if printer.is_some() {
-        Command::new("lpr")
-            .arg(dir)
+        let temp = Command::new("lpr")
+            .arg(dir.clone())
             .arg("-P")
             .arg(printer.as_ref().unwrap())
             .output()
-            .await?
+            .await;
+        // If it failed, try using lp instead
+        match temp {
+            Ok(output) => output,
+            Err(_) => {
+                Command::new("lp")
+                    .arg(dir)
+                    .arg("-d")
+                    .arg(printer.as_ref().unwrap())
+                    .output()
+                    .await?
+            }
+        }
     } else {
-        // Use Default
-        Command::new("lpr").arg(dir).output().await?
+        // Use Default (only works if lpr exists)
+        let temp = Command::new("lpr").arg(dir).output().await
+        match temp {
+            Ok(o) => o,
+            Err(e) => {
+                if e.to_string().contains("found") {
+                    bail!("lpr doesn't exist; recommended passing a printer (-p PRINTER_NAME)");
+                } else {
+                    bail!(e);
+                }
+            },
+        }
     };
 
     // If success, return done, else, return output
