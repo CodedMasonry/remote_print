@@ -45,18 +45,24 @@ pub struct Settings {
 
 impl Default for Interface {
     fn default() -> Self {
+        let settings = get_settings().unwrap();
         Self {
             picked_path: None,
             dropped_files: Vec::new(),
             current_page: Page::Home,
-            settings: get_settings().unwrap(),
 
             carry: String::new(),
             string: String::new(),
             error: String::new(),
 
-            selected_printer: "0.0.0.0".parse().unwrap(),
+            selected_printer: *settings
+                .printers
+                .clone()
+                .keys()
+                .next()
+                .unwrap_or(&"0.0.0.0".parse::<IpAddr>().unwrap()),
             submit_result: None,
+            settings,
         }
     }
 }
