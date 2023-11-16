@@ -69,7 +69,7 @@ fn run_gui() -> Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "Remote Print",
+        "Printer Client",
         options,
         Box::new(|_cc| Box::<Interface>::default()),
     )
