@@ -250,7 +250,7 @@ impl Interface {
                         }
                         Err(e) => {
                             self.submit_result =
-                                Some((format!("Failed to print: {:?}", e), Instant::now()))
+                                Some((format!("Failed to print:\n {:?}", e), Instant::now()))
                         }
                     };
                 } else {
@@ -259,7 +259,7 @@ impl Interface {
             }
 
             if let Some(value) = self.submit_result.clone() {
-                if value.1.elapsed() >= Duration::from_secs(5) {
+                if value.1.elapsed() >= Duration::from_secs(10) {
                     self.submit_result = None;
                 }
 

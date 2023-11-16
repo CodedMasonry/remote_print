@@ -1,16 +1,23 @@
-use std::{fs, io, net::ToSocketAddrs, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    fs, io,
+    net::{SocketAddr, ToSocketAddrs},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use app::Settings;
 use chrono::prelude::*;
 use include_dir::{include_dir, Dir};
-use quinn;
+use inquire;
+use quinn::{self, Connection, Endpoint};
 use rustls::Certificate;
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{fs::File, io::AsyncReadExt, time::timeout};
 use tracing::{debug, error, info, info_span, Instrument};
 use url::Url;
 use uuid::Uuid;
-use inquire;
 
 pub mod app;
 
@@ -95,14 +102,18 @@ pub async fn send_file(
             // Session exists
             if session.expiratrion <= Utc::now() {
                 // Session expired
-                get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).instrument(info_span!("Fetch Session")).await?
+                get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone())
+                    .instrument(info_span!("Fetch Session"))
+                    .await?
             } else {
                 // Session Valid
                 session.clone()
             }
         } else {
             // No session exists
-            let session = get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone()).instrument(info_span!("Fetch Session")).await?;
+            let session = get_session(url.clone(), host.clone(), ca.clone(), temp.pass.clone())
+                .instrument(info_span!("Fetch Session"))
+                .await?;
 
             temp.session = Some(session.clone()); // Update session
             session
@@ -110,7 +121,9 @@ pub async fn send_file(
     } else {
         // No Printer passed, generate temp session
         let pass = request_for_pass().await;
-        get_session(url.clone(), host.clone(), ca.clone(), pass).instrument(info_span!("Fetch Session")).await?
+        get_session(url.clone(), host.clone(), ca.clone(), pass)
+            .instrument(info_span!("Fetch Session"))
+            .await?
     };
 
     // Parse headers and file
@@ -139,11 +152,8 @@ pub async fn send_file(
 
     // Establish connection
     eprintln!("Connecting to {host} at {remote}");
-    let conn = endpoint
-        .connect(remote, host)?
-        .await
-        .map_err(|e| anyhow!("Failed to connect: {}", e))?;
-    debug!("Connected to server");
+    let timelimit = Duration::from_secs(5);
+    let conn = timeout(timelimit, establish_conn(endpoint.clone(), remote, host)).await??;
 
     // Parse Reader & Writer
     let (mut send, mut recv) = conn
@@ -173,6 +183,16 @@ pub async fn send_file(
     endpoint.wait_idle().await;
 
     Ok(())
+}
+
+async fn establish_conn(endpoint: Endpoint, remote: SocketAddr, host: &str) -> Result<Connection> {
+    let conn = endpoint
+        .connect(remote, host)?
+        .await
+        .map_err(|e| anyhow!("Failed to connect: {}", e))?;
+    debug!("Connected to server");
+
+    Ok(conn)
 }
 
 pub async fn get_session(
@@ -330,9 +350,10 @@ pub async fn parse_certs() -> Vec<Certificate> {
 /// Ask the user for the password (CLI Only)
 pub async fn request_for_pass() -> String {
     let pass = inquire::Password::new("Please enter a password:")
-            .with_display_toggle_enabled()
-            .with_display_mode(inquire::PasswordDisplayMode::Hidden)
-            .prompt().unwrap();
+        .with_display_toggle_enabled()
+        .with_display_mode(inquire::PasswordDisplayMode::Hidden)
+        .prompt()
+        .unwrap();
 
     pass
 }
