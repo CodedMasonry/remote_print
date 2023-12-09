@@ -63,9 +63,10 @@ fn main() -> Result<()> {
 
 fn run_gui() -> Result<()> {
     let options = eframe::NativeOptions {
-        initial_window_size: Some([450.0, 500.0].into()),
-        min_window_size: Some([400.0, 500.0].into()),
-        drag_and_drop_support: true,
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([450.0, 500.0]) // wide enough for the drag-drop overlay text
+            .with_drag_and_drop(true)
+            .with_min_inner_size([400.0, 500.0]),
         ..Default::default()
     };
     eframe::run_native(

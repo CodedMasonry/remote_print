@@ -22,8 +22,8 @@ orion = { version = "0.17.6", features = ["serde"] }
 quinn = "0.10.2"
 rand = "0.8.5"
 rcgen = { version = "0.11.3", features = ["zeroize"] }
-rustls = "0.22.1"
-rustls-pemfile = "2.0.0"
+rustls = "0.21.7"
+rustls-pemfile = "1.0.3"
 serde = { version = "1.0.190", features = ["derive"] }
 serde_json = "1.0.107"
 tokio = { version = "1.33.0", features = ["full"] }

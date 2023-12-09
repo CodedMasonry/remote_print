@@ -120,12 +120,6 @@ impl eframe::App for Interface {
             egui::menu::bar(ui, |ui| {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            _frame.close();
-                        }
-                    });
-
                     if ui.button("Home").clicked() {
                         self.current_page = Page::Home;
                         self.error = String::new();
