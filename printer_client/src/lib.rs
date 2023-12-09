@@ -65,7 +65,7 @@ pub async fn send_file(
         roots.add(&rustls::Certificate(fs::read(ca_path)?))?;
     } else {
         let dirs =
-            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+            directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         match fs::read(dirs.data_local_dir().join("cert.der")) {
             Ok(cert) => {
                 roots.add(&rustls::Certificate(cert))?;
@@ -212,7 +212,7 @@ pub async fn get_session(
         roots.add(&rustls::Certificate(fs::read(ca_path)?))?;
     } else {
         let dirs =
-            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+            directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         match fs::read(dirs.data_local_dir().join("cert.der")) {
             Ok(cert) => {
                 roots.add(&rustls::Certificate(cert))?;
@@ -306,7 +306,7 @@ pub async fn get_session(
 }
 
 pub fn get_settings() -> Result<Settings> {
-    let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+    let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
 
     let settings = match fs::read(dirs.data_local_dir().join("settings.json")) {
         Ok(file) => {
@@ -327,9 +327,11 @@ pub fn get_settings() -> Result<Settings> {
 }
 
 pub fn save_settings(settings: &Settings) -> Result<()> {
-    let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+    let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
     let json = serde_json::to_string(&settings)?;
 
+    // Make sure directories exist
+    fs::create_dir_all(dirs.data_local_dir())?;
     // Write the json
     fs::write(dirs.data_local_dir().join("settings.json"), json)?;
 

@@ -14,7 +14,6 @@ A backend for running remote printing over the internet, using QUIC + TLS
 [dependencies]
 anyhow = "1.0.75"
 clap = { version = "4.4.6", features = ["derive"] }
-directories-next = "2.0.0"
 eframe = "0.23.0"
 egui = { version = "0.23.0", features = ["persistence"] }
 quinn = "0.10.2"
@@ -31,3 +30,4 @@ include_dir = "0.7.3"
 chrono = { version = "0.4.31", features = ["serde"] }
 uuid = { version = "1.5.0", features = ["v4", "serde"] }
 inquire = "0.6.2"
+directories = "5.0"

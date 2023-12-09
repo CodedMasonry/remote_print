@@ -106,7 +106,9 @@ impl Settings {
         }
 
         // Save settings
-        save_settings(&self).unwrap();
+        if let Err(e) = save_settings(&self) {
+            eprintln!("[Failed to update settings]: {}", e);
+        }
     }
 }
 
