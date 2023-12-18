@@ -43,8 +43,7 @@ impl Session {
 
 impl Settings {
     pub async fn get_settings() -> Result<Settings> {
-        let dirs =
-            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+        let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
 
         let settings = match fs::read(dirs.data_local_dir().join("server_settings.json")).await {
             Ok(file) => {
@@ -70,10 +69,11 @@ impl Settings {
         Ok(settings)
     }
     pub async fn save_settings(settings: &Settings) -> Result<()> {
-        let dirs =
-            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+        let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         let json = serde_json::to_string(&settings)?;
 
+        // Make sure directories exist
+        fs::create_dir_all(dirs.data_local_dir()).await?;
         // Write the json
         fs::write(dirs.data_local_dir().join("server_settings.json"), json).await?;
 
@@ -141,8 +141,7 @@ pub async fn parse_tls_cert(
 
         Ok((cert_chain, key))
     } else {
-        let dirs =
-            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+        let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         let path = dirs.data_local_dir();
         let cert_path = path.join("cert.der");
         let key_path = path.join("key.der");

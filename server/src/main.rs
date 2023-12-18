@@ -50,7 +50,7 @@ fn main() -> Result<()> {
 
     if args.reset_password {
         let dirs =
-            directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+            directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         match std::fs::remove_file(dirs.data_local_dir().join("server_settings.json")) {
             Ok(_) => println!("Password reset"),
             Err(_) => println!("No password was saved"),
