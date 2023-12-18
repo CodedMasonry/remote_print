@@ -150,24 +150,11 @@ impl Interface {
                     .color(egui::Color32::from_rgb(255, 255, 255)),
             );
 
-            ui.horizontal(|ui| {
-                if ui.button("Open file…").clicked() {
-                    if let Some(path) = rfd::FileDialog::new().pick_file() {
-                        self.picked_path = Some(path.display().to_string());
-                    }
+            if !self.dropped_files.is_empty() {
+                if ui.button("Clear dropped files").clicked() {
+                    self.dropped_files.clear();
                 }
 
-                ui.label("Selected File")
-            });
-
-            if let Some(picked_path) = &self.picked_path {
-                ui.horizontal(|ui| {
-                    ui.label("Picked file:");
-                    ui.monospace(picked_path);
-                });
-            }
-
-            if !self.dropped_files.is_empty() {
                 ui.group(|ui| {
                     ui.label("Dropped Files:");
 
@@ -194,6 +181,24 @@ impl Interface {
                         ui.label(info);
                     }
                 });
+            } else {
+                // No files dropped, use default settings
+                ui.horizontal(|ui| {
+                    if ui.button("Open file…").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().pick_file() {
+                            self.picked_path = Some(path.display().to_string());
+                        }
+                    }
+
+                    ui.label("Selected File")
+                });
+
+                if let Some(picked_path) = &self.picked_path {
+                    ui.horizontal(|ui| {
+                        ui.label("Picked file:");
+                        ui.monospace(picked_path);
+                    });
+                }
             }
 
             preview_files_being_dropped(ctx);
@@ -223,40 +228,7 @@ impl Interface {
             }
 
             ui.add_space(8.0);
-            if ui
-                .add_sized([80., 30.], egui::Button::new("Send File"))
-                .clicked()
-            {
-                if let Some(file) = &self.picked_path {
-                    let parsed_url =
-                        Url::parse(&format!("https://{}:4433", self.selected_printer)).unwrap();
-                    let printer_settings = self
-                        .settings
-                        .printers
-                        .get_mut(&self.selected_printer)
-                        .unwrap();
-
-                    // Handle result of sending file
-                    match crate::send_file(
-                        parsed_url,
-                        Some("localhost".to_string()),
-                        None,
-                        file.into(),
-                        Some(printer_settings),
-                    ) {
-                        Ok(_) => {
-                            self.submit_result =
-                                Some(("Successfully printed file".to_string(), Instant::now()))
-                        }
-                        Err(e) => {
-                            self.submit_result =
-                                Some((format!("Failed to print:\n {:?}", e), Instant::now()))
-                        }
-                    };
-                } else {
-                    self.error = String::from("No Send file specified")
-                }
-            }
+            self.send_button(ui);
 
             if let Some(value) = self.submit_result.clone() {
                 if value.1.elapsed() >= Duration::from_secs(10) {
@@ -430,6 +402,76 @@ impl Interface {
                 );
             }
         });
+    }
+
+    fn send_button(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .add_sized([80., 30.], egui::Button::new("Print File"))
+            .clicked()
+        {
+            let parsed_url =
+                Url::parse(&format!("https://{}:4433", self.selected_printer)).unwrap();
+            let printer_settings = self
+                .settings
+                .printers
+                .get_mut(&self.selected_printer)
+                .expect("Failed to get settings for selected printer.");
+
+            if self.dropped_files.is_empty() {
+                if let Some(file) = &self.picked_path {
+                    // Handle result of sending file
+                    match crate::send_file(
+                        parsed_url,
+                        Some("localhost".to_string()),
+                        None,
+                        file.into(),
+                        Some(printer_settings),
+                    ) {
+                        Ok(_) => {
+                            self.submit_result =
+                                Some(("Successfully printed file".to_string(), Instant::now()))
+                        }
+                        Err(e) => {
+                            self.submit_result =
+                                Some((format!("Failed to print:\n {:?}", e), Instant::now()))
+                        }
+                    };
+                } else {
+                    self.error = String::from("No Send file specified")
+                }
+            } else {
+                let mut errors = Vec::new();
+                for file in &self.dropped_files {
+                    let file = match &file.path {
+                        Some(v) => v,
+                        None => {
+                            errors.push("Failed to get one of the files; Do all the files exist?".to_string());
+                            break;
+                        }
+                    };
+
+                    match crate::send_file(
+                        parsed_url.clone(),
+                        Some("localhost".to_string()),
+                        None,
+                        file.into(),
+                        Some(printer_settings),
+                    ) {
+                        Ok(_) => continue,
+                        Err(e) => {
+                            errors.push(format!("Failed to print:\n {:?}", e));
+                        }
+                    };
+                }
+
+                if errors.is_empty() {
+                    self.submit_result =
+                        Some(("Successfully printed files".to_string(), Instant::now()));
+                } else {
+                    self.submit_result = Some((errors.join("\n"), Instant::now()));
+                }
+            }
+        }
     }
 }
 

@@ -25,7 +25,7 @@ static DEFAULT_ROOTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/certs");
 
 const ALPN_QUIC_HTTP: &[&[u8]] = &[b"hq-29"];
 
-#[derive(serde::Deserialize, serde::Serialize, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct Printer {
     pub pass: String,
     pub session: Option<Session>,
@@ -306,7 +306,8 @@ pub async fn get_session(
 }
 
 pub fn get_settings() -> Result<Settings> {
-    let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+    let dirs = directories_next::ProjectDirs::from("com", "CodedMasonry", "RemotePrint").unwrap();
+    debug!("Fetching dir: {:?}", dirs.data_local_dir());
 
     let settings = match fs::read(dirs.data_local_dir().join("settings.json")) {
         Ok(file) => {
@@ -327,8 +328,9 @@ pub fn get_settings() -> Result<Settings> {
 }
 
 pub fn save_settings(settings: &Settings) -> Result<()> {
-    let dirs = directories_next::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+    let dirs = directories_next::ProjectDirs::from("com", "CodedMasonry", "RemotePrint").unwrap();
     let json = serde_json::to_string(&settings)?;
+    debug!("Fetching dir: {:?}", dirs.data_local_dir());
 
     // Write the json
     fs::write(dirs.data_local_dir().join("settings.json"), json)?;
