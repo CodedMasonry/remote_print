@@ -64,8 +64,7 @@ pub async fn send_file(
     if let Some(ca_path) = ca.clone() {
         roots.add(&rustls::Certificate(fs::read(ca_path)?))?;
     } else {
-        let dirs =
-            directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+        let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         match fs::read(dirs.data_local_dir().join("cert.der")) {
             Ok(cert) => {
                 roots.add(&rustls::Certificate(cert))?;
@@ -211,8 +210,7 @@ pub async fn get_session(
     if let Some(ca_path) = ca {
         roots.add(&rustls::Certificate(fs::read(ca_path)?))?;
     } else {
-        let dirs =
-            directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
+        let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
         match fs::read(dirs.data_local_dir().join("cert.der")) {
             Ok(cert) => {
                 roots.add(&rustls::Certificate(cert))?;
@@ -307,7 +305,7 @@ pub async fn get_session(
 
 pub fn get_settings() -> Result<Settings> {
     let dirs = directories::ProjectDirs::from("com", "Coded Masonry", "Remote Print").unwrap();
-    
+
     let settings = match fs::read(dirs.data_local_dir().join("settings.json")) {
         Ok(file) => {
             let settings: Settings = serde_json::from_slice(&file)?;
@@ -359,4 +357,22 @@ pub async fn request_for_pass() -> String {
         .unwrap();
 
     pass
+}
+
+pub fn update_app() -> Result<(), Box<dyn ::std::error::Error>> {
+    use self_update::cargo_crate_version;
+    let mut status_builder = self_update::backends::github::Update::configure();
+
+    let status = status_builder
+        .repo_owner("CodedMasonry")
+        .repo_name("remote_print")
+        .bin_name("printer_client")
+        .show_download_progress(true)
+        .no_confirm(true)
+        .current_version(cargo_crate_version!())
+        .build()?
+        .update()?;
+
+    println!("Update status: `{}`!", status.version());
+    Ok(())
 }

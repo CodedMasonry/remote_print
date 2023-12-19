@@ -436,12 +436,15 @@ impl Interface {
                     self.error = String::from("No Send file specified")
                 }
             } else {
-                let mut errors = Vec::new();
+                let mut results = Vec::new();
                 for file in &self.dropped_files {
                     let file = match &file.path {
                         Some(v) => v,
                         None => {
-                            errors.push("Failed to get one of the files; Do all the files exist?".to_string());
+                            results.push(
+                                "Failed to get one of the files; Do all the files exist?"
+                                    .to_string(),
+                            );
                             break;
                         }
                     };
@@ -453,19 +456,13 @@ impl Interface {
                         file.into(),
                         Some(printer_settings),
                     ) {
-                        Ok(_) => continue,
+                        Ok(_) => results.push(format!("Successfully printed: {:?}", file.file_name().unwrap_or_default())),
                         Err(e) => {
-                            errors.push(format!("Failed to print:\n {:?}", e));
+                            results.push(format!("Failed to print {:?}: {:?}", file.file_name().unwrap_or_default(), e));
                         }
                     };
                 }
-
-                if errors.is_empty() {
-                    self.submit_result =
-                        Some(("Successfully printed files".to_string(), Instant::now()));
-                } else {
-                    self.submit_result = Some((errors.join("\n"), Instant::now()));
-                }
+                self.submit_result = Some((results.join("\n"), Instant::now()));
             }
         }
     }
