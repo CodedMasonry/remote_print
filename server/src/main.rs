@@ -281,6 +281,7 @@ async fn print_file(
                     .arg(dir)
                     .arg("-d")
                     .arg(printer.as_ref().unwrap())
+                    .arg("-oColorModel=cym")
                     .output()
                     .await?
             }
@@ -293,6 +294,7 @@ async fn print_file(
             Err(_) => {
                 Command::new("lp")
                     .arg(dir)
+                    .arg("-oColorModel=cym")
                     .output()
                     .await?
             }
