@@ -273,7 +273,9 @@ async fn print_file(
             .arg(printer.as_ref().unwrap())
             .output()
             .await;
+
         // If it failed, try using lp instead
+        // Printing flags can be removed if compiling locally
         match temp {
             Ok(output) => output,
             Err(_) => {
