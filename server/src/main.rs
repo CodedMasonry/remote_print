@@ -282,6 +282,7 @@ async fn print_file(
                     .arg("-d")
                     .arg(printer.as_ref().unwrap())
                     .arg("-oColorModel=cym")
+                    .arg("-o number-up=1 filename")
                     .output()
                     .await?
             }
@@ -295,6 +296,7 @@ async fn print_file(
                 Command::new("lp")
                     .arg(dir)
                     .arg("-oColorModel=cym")
+                    .arg("-o number-up=1 filename")
                     .output()
                     .await?
             }
