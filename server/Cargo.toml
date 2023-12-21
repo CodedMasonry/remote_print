@@ -1,7 +1,7 @@
 
 [package]
 name = "printer_server"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 repository = "https://github.com/CodedMasonry/remote_print"
 authors = ["Brock Shaffer <109301662+CodedMasonry@users.noreply.github.com>"]
