@@ -108,7 +108,7 @@ jobs:
           version: 1.0
           execute_install_scripts: true
       - name: Install non-standard targets
-        run: rustup target add arm7-unknown-linux-gnueabihf
+        run: rustup target add arm-unknown-linux-gnueabihf
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
       - name: Install dependencies
@@ -160,7 +160,7 @@ jobs:
           version: 1.0
           execute_install_scripts: true
       - name: Install non-standard targets
-        run: rustup target add arm7-unknown-linux-gnueabihf
+        run: rustup target add arm-unknown-linux-gnueabihf
       - name: Install cargo-dist
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.4.2/cargo-dist-installer.sh | sh"
       # Get all the local artifacts for the global tasks to use (for e.g. checksums)
