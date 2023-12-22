@@ -8,6 +8,7 @@ use printer_client::app::Interface;
 use tracing::error;
 use tracing_subscriber;
 use url::Url;
+use self_update::cargo_crate_version;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -39,10 +40,10 @@ enum Commands {
 
 // Init tracing
 fn main() -> Result<()> {
-
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
+    //update();
 
     if args.command.is_none() {
         run_gui()?;
@@ -79,3 +80,19 @@ fn run_gui() -> Result<()> {
 
     Ok(())
 }
+
+/*
+fn update() -> Result<(), Box<dyn std::error::Error>> {
+    let status = self_update::backends::github::Update::configure()
+        .repo_owner("CodedMasonry")
+        .repo_name("remote_print")
+        .bin_name("github")
+        .show_download_progress(true)
+        .current_version(cargo_crate_version!())
+        .build()?
+        .update()?;
+
+    println!("Update status: `{}`!", status.version());
+    Ok(())
+}
+*/
