@@ -299,7 +299,7 @@ async fn print_file(
         }
     };
 
-    // If success, return done, else, return output
+    // If success, return done, else, return output.
     if result.status.success() {
         Ok(b"done".to_vec())
     } else {

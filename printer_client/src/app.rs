@@ -1,3 +1,4 @@
+use semver::{Version, VersionReq};
 use std::{
     net::IpAddr,
     time::{Duration, Instant},
@@ -8,8 +9,27 @@ use egui::{
     ahash::{HashMap, HashMapExt},
     Color32, Context, RichText,
 };
+use lazy_static::lazy_static;
 
-use crate::{get_settings, save_settings, Printer};
+use crate::{fetch_latest_client_version, get_settings, save_settings, Printer, CURRENT_VERSION};
+
+lazy_static! {
+    static ref IS_OUTDATED: bool = (|| {
+        let version_requirement = get_version_requirement();
+        println!("{:?}", version_requirement);
+        println!("{}", CURRENT_VERSION);
+        match version_requirement {
+            Ok(requirement) => {
+                if requirement == Version::parse(CURRENT_VERSION).unwrap() {
+                    false
+                } else {
+                    true
+                }
+            }
+            Err(_) => true, // Failed to compute; this would be confusing to mark as outdated.
+        }
+    })();
+}
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub enum Page {
@@ -32,7 +52,7 @@ pub struct Interface {
 
     carry: String, // Insturctions to carry to next iteration
     string: String,
-    error: String,
+    pub error: String,
 
     selected_printer: IpAddr,
     submit_result: Option<(String, Instant)>,
@@ -247,6 +267,7 @@ impl Interface {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
+                version_warning(ui);
                 egui::warn_if_debug_build(ui);
             });
         });
@@ -287,7 +308,9 @@ impl Interface {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
+                version_warning(ui);
                 egui::warn_if_debug_build(ui);
+                //#[cfg(not(debug_assertions))]
             });
         });
     }
@@ -456,9 +479,16 @@ impl Interface {
                         file.into(),
                         Some(printer_settings),
                     ) {
-                        Ok(_) => results.push(format!("Successfully printed: {:?}", file.file_name().unwrap_or_default())),
+                        Ok(_) => results.push(format!(
+                            "Successfully printed: {:?}",
+                            file.file_name().unwrap_or_default()
+                        )),
                         Err(e) => {
-                            results.push(format!("Failed to print {:?}: {:?}", file.file_name().unwrap_or_default(), e));
+                            results.push(format!(
+                                "Failed to print {:?}: {:?}",
+                                file.file_name().unwrap_or_default(),
+                                e
+                            ));
                         }
                     };
                 }
@@ -471,13 +501,32 @@ impl Interface {
 fn footer(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
         ui.hyperlink_to(
-            "remote_print",
-            "https://github.com/CodedMasonry/remote_print",
+            "Remote print",
+            "https://github.com/CodedMasonry/remote_print/releases",
         );
-        ui.label(".");
+        ui.label(format!("\tv{}", env!("CARGO_PKG_VERSION")));
     });
+}
+
+fn version_warning(ui: &mut egui::Ui) {
+    if *IS_OUTDATED {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.label(
+                RichText::new("Version is Outdated")
+                    .color(Color32::RED)
+                    .small(),
+            )
+            .on_hover_text("A new version has been released on github")
+        });
+    }
+}
+
+fn get_version_requirement() -> Result<Version, Box<dyn std::error::Error>> {
+    let latest_version = fetch_latest_client_version()?;
+
+    Ok(latest_version)
 }
 
 fn preview_files_being_dropped(ctx: &egui::Context) {
