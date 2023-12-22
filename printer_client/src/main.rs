@@ -65,7 +65,7 @@ fn main() -> Result<()> {
 
 fn run_gui() -> Result<()> {
     println!("Running version: {}", env!("CARGO_PKG_VERSION"));
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([450.0, 500.0]) // wide enough for the drag-drop overlay text
@@ -84,7 +84,7 @@ fn run_gui() -> Result<()> {
 }
 
 /*
-// why god why
+// why god why.
 fn update() -> Result<(), Box<dyn std::error::Error>> {
     let status = self_update::backends::github::Update::configure()
         .repo_owner("CodedMasonry")
