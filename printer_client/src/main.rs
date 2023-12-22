@@ -82,7 +82,7 @@ fn run_gui() -> Result<()> {
 }
 
 /*
-// why
+// why god way
 fn update() -> Result<(), Box<dyn std::error::Error>> {
     let status = self_update::backends::github::Update::configure()
         .repo_owner("CodedMasonry")
