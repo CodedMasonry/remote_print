@@ -6,6 +6,7 @@ edition = "2021"
 repository = "https://github.com/CodedMasonry/remote_print"
 authors = ["Brock Shaffer <109301662+CodedMasonry@users.noreply.github.com>"]
 license = "MIT"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-unknown-linux-gnu"]
 description = """
 A backend for running remote printing over the internet, using QUIC + TLS
 """
