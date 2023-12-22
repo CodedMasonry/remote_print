@@ -275,7 +275,7 @@ async fn print_file(
             .await;
 
         // If it failed, try using lp instead
-        // Printing flags can be removed if compiling locally
+        // Printing flags can be removed if compiling locally.
         match temp {
             Ok(output) => output,
             Err(_) => {
