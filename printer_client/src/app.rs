@@ -11,10 +11,12 @@ use egui::{
 };
 use lazy_static::lazy_static;
 
-use crate::{fetch_latest_client_version, get_settings, save_settings, Printer, CURRENT_VERSION};
+use crate::{fetch_latest_client_version, get_settings, save_settings, Printer};
 
 lazy_static! {
     static ref IS_OUTDATED: bool = (|| {
+        false
+        /*
         let version_requirement = get_version_requirement();
         println!("{:?}", version_requirement);
         println!("{}", CURRENT_VERSION);
@@ -28,6 +30,7 @@ lazy_static! {
             }
             Err(_) => true, // Failed to compute; this would be confusing to mark as outdated.
         }
+        */
     })();
 }
 
@@ -267,7 +270,6 @@ impl Interface {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
-                version_warning(ui);
                 egui::warn_if_debug_build(ui);
             });
         });
@@ -308,7 +310,6 @@ impl Interface {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
-                version_warning(ui);
                 egui::warn_if_debug_build(ui);
                 //#[cfg(not(debug_assertions))]
             });
