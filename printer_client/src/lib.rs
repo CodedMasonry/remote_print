@@ -13,9 +13,7 @@ use chrono::prelude::*;
 use include_dir::{include_dir, Dir};
 use inquire;
 use quinn::{self, Connection, Endpoint};
-use reqwest;
 use rustls::Certificate;
-use semver::Version;
 use tokio::{fs::File, io::AsyncReadExt, time::timeout};
 use tracing::{debug, error, info, info_span, Instrument};
 use url::Url;
@@ -360,37 +358,4 @@ pub async fn request_for_pass() -> String {
         .unwrap();
 
     pass
-}
-
-const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const REPO_OWNER: &str = "your_username";
-const REPO_NAME: &str = "your_repository";
-const CLIENT_BINARY_NAME: &str = "client_binary_name";
-
-fn fetch_latest_client_version() -> Result<Version, Box<dyn std::error::Error>> {
-    let url = format!(
-        "https://api.github.com/repos/{}/{}/releases/latest",
-        REPO_OWNER, REPO_NAME
-    );
-
-    let client = reqwest::blocking::Client::new();
-    let response = client.get(&url).send()?;
-
-    let json: serde_json::Value = serde_json::from_str(&response.text()?)?;
-    let assets = &json["assets"];
-
-    if let Some(assets) = assets.as_array() {
-        for asset in assets {
-            if let Some(name) = asset["name"].as_str() {
-                if name.contains(CLIENT_BINARY_NAME) {
-                    let version_str = json["tag_name"]
-                        .as_str()
-                        .ok_or_else(|| anyhow!("Failed to find released version"))?;
-                    return Ok(Version::parse(version_str)?);
-                }
-            }
-        }
-    }
-
-    Err(format!("Failed to parse version").into())
 }
