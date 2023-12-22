@@ -19,6 +19,9 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install non-standard targets
+        run: rustup target add aarch64-unknown-linux-gnu
+
       - name: Install packages (Linux)
         if: runner.os == 'Linux'
         #uses: awalsh128/cache-apt-pkgs-action@v1.2.2
@@ -29,12 +32,9 @@ jobs:
           version: 1.0
           execute_install_scripts: true
 
-      - name: Install non-standard targets
-        run: rustup target add aarch64-unknown-linux-gnu
-
-
       - name: Run release-plz
         uses: MarcoIeni/release-plz-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PKG_CONFIG_ALLOW_CROSS: 1

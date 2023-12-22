@@ -1,7 +1,7 @@
 
 [package]
 name = "printer_server"
-version = "0.1.4"
+version = "0.1.17"
 edition = "2021"
 repository = "https://github.com/CodedMasonry/remote_print"
 authors = ["Brock Shaffer <109301662+CodedMasonry@users.noreply.github.com>"]
@@ -18,6 +18,7 @@ clap = { version = "4.4.6", features = ["derive"] }
 directories = "5.0"
 inquire = "0.6.2"
 lazy_static = "1.4.0"
+openssl = { version = "0.10.62", features = ["vendored"] }
 orion = { version = "0.17.6", features = ["serde"] }
 quinn = "0.10.2"
 rand = "0.8.5"

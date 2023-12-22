@@ -273,7 +273,9 @@ async fn print_file(
             .arg(printer.as_ref().unwrap())
             .output()
             .await;
+
         // If it failed, try using lp instead
+        // Printing flags can be removed if compiling locally.
         match temp {
             Ok(output) => output,
             Err(_) => {
@@ -281,6 +283,8 @@ async fn print_file(
                     .arg(dir)
                     .arg("-d")
                     .arg(printer.as_ref().unwrap())
+                    .arg("-oColorModel=cym")
+                    .arg("-o number-up=1")
                     .output()
                     .await?
             }
@@ -293,6 +297,8 @@ async fn print_file(
             Err(_) => {
                 Command::new("lp")
                     .arg(dir)
+                    .arg("-oColorModel=cym")
+                    .arg("-o number-up=1")
                     .output()
                     .await?
             }

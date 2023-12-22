@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
     str::FromStr,
     sync::Arc,
-    time::Duration,
+    time::Duration, ffi::OsStr,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -132,13 +132,14 @@ pub async fn send_file(
     let headers = Vec::from([
         format!("POST {:?}", file.file_name().unwrap()),
         format!("Content-Length: {}", file.metadata().unwrap().len()),
-        format!("Extension: {:?}", file.extension().unwrap()),
+        format!("Extension: {}", file.extension().and_then(OsStr::to_str).unwrap()),
         format!("Session: {}", session.id),
         format!("\r\n"),
     ])
     .join("\r\n");
 
     let mut buf = Vec::new();
+    debug!("Headers: {:?}", headers);
     File::open(file).await?.read_to_end(&mut buf).await?;
 
     // convert request to binary
