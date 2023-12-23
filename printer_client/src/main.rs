@@ -42,9 +42,6 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
-    if let Err(e) = update() {
-        eprintln!("Failed to update: \n{:#?}", e);
-    }
 
     if args.command.is_none() {
         run_gui()?;
@@ -106,13 +103,13 @@ fn update() -> Result<(), Box<dyn std::error::Error>> {
     let files = asset
         .assets
         .into_iter()
-        .filter(|val| val.name.contains("ps1") || val.name.contains("sh"))
+        .filter(|val| val.name.contains("msi") || val.name.contains("sh"))
         .filter(|val| !val.name.contains("sha"));
 
     // If the OS matches, installer will be set to it (Compiler flags will dictate this)
     for file in files {
         #[cfg(target_os = "windows")]
-        if file.name.contains("ps1") {
+        if file.name.contains("msi") {
             installer = Some(file);
         }
 
@@ -129,7 +126,7 @@ fn update() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if let None = installer {
-        return Err(anyhow!("No installer for supported OS").into())
+        return Err(anyhow!("No installer for supported OS; Check releases to see if you're platform is supported").into())
     }
 
     println!("Installer: {:#?}", installer);
