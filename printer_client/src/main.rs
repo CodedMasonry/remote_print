@@ -1,14 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
 use printer_client::app::Interface;
 
 use tracing::error;
 use tracing_subscriber;
 use url::Url;
-use self_update::cargo_crate_version;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -43,7 +42,9 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
-    //update();
+    if let Err(e) = update() {
+        eprintln!("Failed to update: \n{:#?}", e);
+    }
 
     if args.command.is_none() {
         run_gui()?;
@@ -83,19 +84,55 @@ fn run_gui() -> Result<()> {
     Ok(())
 }
 
-/*
-// why god why.
 fn update() -> Result<(), Box<dyn std::error::Error>> {
-    let status = self_update::backends::github::Update::configure()
+    let releases = self_update::backends::github::ReleaseList::configure()
         .repo_owner("CodedMasonry")
         .repo_name("remote_print")
-        .bin_name("github")
-        .show_download_progress(true)
-        .current_version(cargo_crate_version!())
         .build()?
-        .update()?;
+        .fetch()?;
+    println!("found releases:");
 
-    println!("Update status: `{}`!", status.version());
+    // get the first available release
+    let asset = releases
+        .into_iter()
+        .filter(|val| val.name.contains("printer_client"))
+        .next()
+        .unwrap();
+
+    //.asset_for(&self_update::get_target(), Some("printer_client-"))
+
+    let mut installer = None;
+
+    let files = asset
+        .assets
+        .into_iter()
+        .filter(|val| val.name.contains("ps1") || val.name.contains("sh"))
+        .filter(|val| !val.name.contains("sha"));
+
+    // If the OS matches, installer will be set to it (Compiler flags will dictate this)
+    for file in files {
+        #[cfg(target_os = "windows")]
+        if file.name.contains("ps1") {
+            installer = Some(file);
+        }
+
+        #[cfg(target_os = "linux")]
+        if file.name.contains("sh") {
+            installer = Some(file);
+        }
+
+        // plan to add this later
+        #[cfg(target_os = "macos")]
+        if file {
+            installer = None;
+        }
+    }
+
+    if let None = installer {
+        return Err(anyhow!("No installer for supported OS").into())
+    }
+
+    println!("Installer: {:#?}", installer);
+
     Ok(())
 }
-*/

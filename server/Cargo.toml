@@ -14,6 +14,12 @@ A backend for running remote printing over the internet, using QUIC + TLS
 [package.metadata.dist]
 targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-unknown-linux-gnu"]
 
+[package.metadata.wix]
+upgrade-guid = "1567B797-10CB-4DED-866D-3077891EA521"
+path-guid = "2DA622A5-0E87-4ABC-A930-870D7C3AB397"
+license = false
+eula = false
+
 
 [dependencies]
 anyhow = "1.0.75"

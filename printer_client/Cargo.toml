@@ -9,6 +9,12 @@ description = """
 A backend for running remote printing over the internet, using QUIC + TLS
 """
 
+[package.metadata.wix]
+upgrade-guid = "CB24562B-4738-4A62-8882-BDDF34D65F80"
+path-guid = "B6B55B4A-BA6D-404B-8509-8FE0E750E5D6"
+license = false
+eula = false
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -32,4 +38,6 @@ uuid = { version = "1.5.0", features = ["v4", "serde"] }
 inquire = "0.6.2"
 directories = "5.0"
 self_update = { version = "0.39.0", features = ["archive-zip", "archive-tar"] }
-openssl = { version = "0.10.62", features = ["vendored"] }
+tempfile = "3.8.1"
+reqwest = "0.11.23"
+# openssl = { version = "0.10.62", features = ["vendored"] }
