@@ -49,7 +49,7 @@ pub fn update() -> Result<(), Box<dyn std::error::Error>> {
 
         // plan to add this later
         #[cfg(target_os = "macos")]
-        if file {
+        {
             installer = None;
             file_type = None;
         }
