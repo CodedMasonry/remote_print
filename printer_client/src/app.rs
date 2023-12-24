@@ -53,7 +53,16 @@ pub struct Settings {
 
 impl Default for Interface {
     fn default() -> Self {
+        let mut build_error = String::new();
         let settings = get_settings().unwrap();
+        let update_status = match update::check_oudated() {
+            Ok(val) => val,
+            Err(e) => {
+                build_error = e.to_string();
+                VersionStatus::UpToDate
+            }
+        };
+
         Self {
             picked_path: None,
             dropped_files: Vec::new(),
@@ -61,7 +70,7 @@ impl Default for Interface {
 
             carry: String::new(),
             string: String::new(),
-            error: String::new(),
+            error: build_error,
 
             selected_printer: *settings
                 .printers
@@ -71,7 +80,7 @@ impl Default for Interface {
                 .unwrap_or(&"0.0.0.0".parse::<IpAddr>().unwrap()),
             submit_result: None,
             settings,
-            update_status: crate::update::check_oudated(),
+            update_status: update_status,
         }
     }
 }

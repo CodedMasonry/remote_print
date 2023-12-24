@@ -1,14 +1,14 @@
 use std::process::{self, Command, Stdio};
 
 use anyhow::anyhow;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 use update_informer::{registry, Check};
 
 use crate::app::VersionStatus;
 
 #[derive(Clone, Debug)]
 pub struct Release {
-    name: String,
+    _name: String,
     assets: Vec<Asset>,
 }
 
@@ -128,7 +128,7 @@ pub fn get_latest_release(name: &str) -> Result<Release, Box<dyn std::error::Err
         .unwrap();
 
     return Ok(Release {
-        name: release["name"].to_string().replace("\"", ""),
+        _name: release["name"].to_string().replace("\"", ""),
         assets: parse_assets(release["assets"].as_array().unwrap()),
     });
 }
@@ -145,16 +145,25 @@ fn parse_assets(assets: &[serde_json::Value]) -> Vec<Asset> {
     return result;
 }
 
-pub fn check_oudated() -> VersionStatus {
+pub fn check_oudated() -> Result<VersionStatus, Box<dyn std::error::Error>> {
     let informer = update_informer::new(
         registry::Crates,
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
     );
 
-    if let Ok(Some(ver)) = informer.check_version() {
-        return VersionStatus::OutDated(ver.to_string());
+    let status = match informer.check_version() {
+        Ok(ver) => ver,
+        Err(e) => {
+            error!("Failed to fetch version status: {:#?}", e);
+            return Err(e);
+        }
+    };
+
+    if let Some(ver) = status {
+        return Ok(VersionStatus::OutDated(ver.to_string()));
     } else {
-        return VersionStatus::UpToDate;
+        println!("Up To Date");
+        return Ok(VersionStatus::UpToDate);
     }
 }
