@@ -1,14 +1,20 @@
-use std::process::{self, Command, Stdio};
+use std::{
+    fs,
+    process::{self, Command, Stdio},
+    time::Duration,
+};
 
 use anyhow::anyhow;
-use tracing::{debug, error, trace};
+use semver::Version;
+use tracing::{debug, error};
 use update_informer::{registry, Check};
+use uuid::Uuid;
 
 use crate::app::VersionStatus;
 
 #[derive(Clone, Debug)]
 pub struct Release {
-    _name: String,
+    version: String,
     assets: Vec<Asset>,
 }
 
@@ -21,11 +27,9 @@ pub struct Asset {
 pub fn update() -> Result<(), Box<dyn std::error::Error>> {
     // get the first available release
     let release = get_latest_release("printer_client")?;
-    trace!("{:#?}", release);
     debug!("Got latest release");
 
     let mut installer = None;
-    let mut file_type = None;
 
     let files = release
         .assets
@@ -35,16 +39,12 @@ pub fn update() -> Result<(), Box<dyn std::error::Error>> {
 
     // If the OS matches, installer will be set to it (Compiler flags will dictate this)
     for file in files {
-
-        if cfg!(target_os = "windows")  && file.name.contains("msi") {
+        if cfg!(target_os = "windows") && file.name.contains("msi") {
             installer = Some(file);
-            file_type = Some("msi");
         } else if cfg!(target_os = "linux") && file.name.contains("sh") {
             installer = Some(file);
-            file_type = Some("sh");
         } else {
             installer = None;
-            file_type = None;
         }
     }
 
@@ -57,35 +57,41 @@ pub fn update() -> Result<(), Box<dyn std::error::Error>> {
             .into())
         }
     };
-    println!("[Installer]: {}", installer.name);
+    println!("[Installer]: {}", installer.download_url);
 
-    let mut installed_update = tempfile::Builder::new()
-        .prefix("printer_client")
-        .suffix(&format!(".{}", file_type.unwrap()))
-        .tempfile()?;
+    let path = format!(
+        "{}{}-printer_client.msi",
+        std::env::temp_dir().to_string_lossy(),
+        Uuid::new_v4()
+    );
     debug!("Temporary file created");
-    let mut response = reqwest::blocking::get(installer.download_url)?;
+
+    let response = reqwest::blocking::Client::new()
+        .get(installer.download_url)
+        .header("User-Agent", "remote_print")
+        .send()?;
+    let status = response.status();
     debug!("Fetched response");
 
-    // Directly read response to
-    std::io::copy(&mut response, &mut installed_update)?;
-    debug!("Copied file to file");
-
-    if !response.status().is_success() {
-        return Err(anyhow!("Failed to download update installer").into());
+    if !status.is_success() {
+        return Err(anyhow!("Failed to download update installer: {}", status.as_str()).into());
     }
 
     // Handle the installer to run
     if cfg!(target_os = "windows") {
-        Command::new("msiexec")
-            .arg("/i")
-            .arg(installed_update.path())
-            .spawn()?;
+        println!("{:#?}", path);
+        fs::write(path.clone(), response.bytes()?)?;
+        println!("Copied installer to file");
+
+        Command::new("msiexec").arg("/i").arg(path).spawn()?;
 
         process::exit(0);
     } else if cfg!(target_os = "linux") {
+        fs::write(path.clone(), response.text()?)?;
+        println!("Copied installer to file");
+
         Command::new("sh")
-            .arg(installed_update.path())
+            .arg(path)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?;
@@ -108,22 +114,31 @@ pub fn get_latest_release(name: &str) -> Result<Release, Box<dyn std::error::Err
         .send()?;
     debug!("Got update API response");
 
-    let binding = resp.json::<serde_json::Value>()?;
+    let binding: serde_json::Value = resp.json::<serde_json::Value>()?;
     let releases = match binding.as_array() {
         Some(val) => val,
         None => return Err(anyhow!("No Releases found").into()),
     };
 
-    let release: &serde_json::Value = releases
-        .into_iter()
-        .filter(|val| val["name"].as_str().unwrap().contains(name))
-        .next()
-        .unwrap();
+    let mut formatted_releases = Vec::new();
+    for rel in releases {
+        if rel["tag_name"].to_string().contains(name) {
+            let version = rel["tag_name"].to_string();
 
-    return Ok(Release {
-        _name: release["name"].to_string().replace("\"", ""),
-        assets: parse_assets(release["assets"].as_array().unwrap()),
-    });
+            formatted_releases.push(Release {
+                assets: parse_assets(rel["assets"].as_array().unwrap()),
+                version: version
+                    .replace("\"", "")
+                    .split("-v")
+                    .last()
+                    .unwrap()
+                    .to_owned(),
+            })
+        }
+    }
+
+    let newest = find_most_recent(&formatted_releases)?;
+    return Ok(newest.clone());
 }
 
 fn parse_assets(assets: &[serde_json::Value]) -> Vec<Asset> {
@@ -131,19 +146,47 @@ fn parse_assets(assets: &[serde_json::Value]) -> Vec<Asset> {
     for asset in assets {
         result.push(Asset {
             name: asset["name"].to_string().replace("\"", ""),
-            download_url: asset["url"].to_string().replace("\"", ""),
+            download_url: asset["browser_download_url"].to_string().replace("\"", ""),
         })
     }
 
     return result;
 }
 
+fn find_most_recent(items: &Vec<Release>) -> Result<&Release, Box<dyn std::error::Error>> {
+    let mut parsed_versions = Vec::new();
+
+    for item in items {
+        match Version::parse(&item.version) {
+            Ok(parsed_version) => {
+                parsed_versions.push(parsed_version);
+            }
+            Err(e) => {
+                return Err(anyhow!("Failed to parse [{:#?}]: {:#?}", item.version, e).into());
+            }
+        }
+    }
+
+    let most_recent = parsed_versions.iter().max();
+
+    match most_recent {
+        Some(most_recent) if most_recent > &Version::parse(env!("CARGO_PKG_VERSION")).unwrap() => {
+            Ok(&items[parsed_versions
+                .iter()
+                .position(|v| v == most_recent)
+                .unwrap()])
+        }
+        _ => Err(anyhow!("No version newer than current version").into()),
+    }
+}
+
 pub fn check_oudated() -> Result<VersionStatus, Box<dyn std::error::Error>> {
     let informer = update_informer::new(
         registry::Crates,
-        env!("CARGO_PKG_NAME"),
+        "printer_client",
         env!("CARGO_PKG_VERSION"),
-    );
+    )
+    .interval(Duration::ZERO);
 
     let status = match informer.check_version() {
         Ok(ver) => ver,
