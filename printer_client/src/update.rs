@@ -35,21 +35,14 @@ pub fn update() -> Result<(), Box<dyn std::error::Error>> {
 
     // If the OS matches, installer will be set to it (Compiler flags will dictate this)
     for file in files {
-        #[cfg(target_os = "windows")]
-        if file.name.contains("msi") {
+
+        if cfg!(target_os = "windows")  && file.name.contains("msi") {
             installer = Some(file);
             file_type = Some("msi");
-        }
-
-        #[cfg(target_os = "linux")]
-        if file.name.contains("sh") {
+        } else if cfg!(target_os = "linux") && file.name.contains("sh") {
             installer = Some(file);
-            file_type = Some("sh")
-        }
-
-        // plan to add this later
-        #[cfg(target_os = "macos")]
-        {
+            file_type = Some("sh");
+        } else {
             installer = None;
             file_type = None;
         }
