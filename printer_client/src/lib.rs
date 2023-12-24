@@ -20,6 +20,7 @@ use url::Url;
 use uuid::Uuid;
 
 pub mod app;
+pub mod update;
 
 static DEFAULT_ROOTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/certs");
 

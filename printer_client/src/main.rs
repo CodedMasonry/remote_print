@@ -1,12 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use std::path::PathBuf;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use printer_client::app::Interface;
 
 use tracing::error;
-use tracing_subscriber;
+use tracing_subscriber::{self};
 use url::Url;
 
 #[derive(Parser, Debug)]
@@ -77,59 +77,6 @@ fn run_gui() -> Result<()> {
         Box::new(|_cc| Box::<Interface>::default()),
     )
     .unwrap_or_else(|e| error!("Failed to run GUI: {}", e));
-
-    Ok(())
-}
-
-fn update() -> Result<(), Box<dyn std::error::Error>> {
-    let releases = self_update::backends::github::ReleaseList::configure()
-        .repo_owner("CodedMasonry")
-        .repo_name("remote_print")
-        .build()?
-        .fetch()?;
-    println!("found releases:");
-
-    // get the first available release
-    let asset = releases
-        .into_iter()
-        .filter(|val| val.name.contains("printer_client"))
-        .next()
-        .unwrap();
-
-    //.asset_for(&self_update::get_target(), Some("printer_client-"))
-
-    let mut installer = None;
-
-    let files = asset
-        .assets
-        .into_iter()
-        .filter(|val| val.name.contains("msi") || val.name.contains("sh"))
-        .filter(|val| !val.name.contains("sha"));
-
-    // If the OS matches, installer will be set to it (Compiler flags will dictate this)
-    for file in files {
-        #[cfg(target_os = "windows")]
-        if file.name.contains("msi") {
-            installer = Some(file);
-        }
-
-        #[cfg(target_os = "linux")]
-        if file.name.contains("sh") {
-            installer = Some(file);
-        }
-
-        // plan to add this later
-        #[cfg(target_os = "macos")]
-        if file {
-            installer = None;
-        }
-    }
-
-    if let None = installer {
-        return Err(anyhow!("No installer for supported OS; Check releases to see if you're platform is supported").into())
-    }
-
-    println!("Installer: {:#?}", installer);
 
     Ok(())
 }

@@ -24,6 +24,12 @@ pub enum Crud {
     Add,
 }
 
+/// Current version status
+pub enum VersionStatus {
+    UpToDate,
+    OutDated,
+}
+
 pub struct Interface {
     picked_path: Option<String>,
     dropped_files: Vec<egui::DroppedFile>,
@@ -36,6 +42,7 @@ pub struct Interface {
 
     selected_printer: IpAddr,
     submit_result: Option<(String, Instant)>,
+
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
