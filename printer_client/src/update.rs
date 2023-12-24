@@ -55,7 +55,7 @@ pub fn update() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let installer = match installer {
+    let installer: Asset = match installer {
         Some(val) => val,
         None => {
             return Err(anyhow!(
