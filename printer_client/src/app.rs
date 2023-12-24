@@ -6,10 +6,10 @@ use url::Url;
 
 use egui::{
     ahash::{HashMap, HashMapExt},
-    Color32, Context, RichText,
+    Color32, Context, RichText, Widget,
 };
 
-use crate::{get_settings, save_settings, Printer};
+use crate::{get_settings, save_settings, update, Printer};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub enum Page {
@@ -27,7 +27,7 @@ pub enum Crud {
 /// Current version status
 pub enum VersionStatus {
     UpToDate,
-    OutDated,
+    OutDated(String),
 }
 
 pub struct Interface {
@@ -43,6 +43,7 @@ pub struct Interface {
     selected_printer: IpAddr,
     submit_result: Option<(String, Instant)>,
 
+    update_status: VersionStatus,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -70,6 +71,7 @@ impl Default for Interface {
                 .unwrap_or(&"0.0.0.0".parse::<IpAddr>().unwrap()),
             submit_result: None,
             settings,
+            update_status: VersionStatus::OutDated("1.1.1".to_string()), //crate::update::check_oudated(),
         }
     }
 }
@@ -255,6 +257,7 @@ impl Interface {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
                 egui::warn_if_debug_build(ui);
+                self.version_warning(ui);
             });
         });
     }
@@ -295,6 +298,7 @@ impl Interface {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 footer(ui);
                 egui::warn_if_debug_build(ui);
+                self.version_warning(ui);
                 //#[cfg(not(debug_assertions))]
             });
         });
@@ -479,6 +483,33 @@ impl Interface {
                 }
                 self.submit_result = Some((results.join("\n"), Instant::now()));
             }
+        }
+    }
+
+    fn version_warning(&mut self, ui: &mut egui::Ui) {
+        if let VersionStatus::OutDated(ver) = &self.update_status {
+            //RichText::new(format!("New Version Available: {} -> {}", env!("CARGO_PKG_VERSION"), ver))
+            let button = egui::Button::new(
+                RichText::new(format!(
+                    "New Version Available: {} -> {}",
+                    env!("CARGO_PKG_VERSION"),
+                    ver
+                ))
+                .small()
+                .color(Color32::from_rgb(255, 140, 0)),
+            )
+            .frame(false);
+            let mut response = button.ui(ui);
+
+            if cfg!(target_os = "windows") {
+                response = response.on_hover_text("Click to launch updater");
+            } else if cfg!(target_os = "linux") {
+                response = response.on_hover_text("Click to launch updater");
+            } else {
+                response = response.on_hover_text("Please visit releases to update app");
+            }
+
+            if response.clicked() {}
         }
     }
 }

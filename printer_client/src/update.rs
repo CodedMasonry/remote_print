@@ -138,8 +138,8 @@ pub fn check_oudated() -> VersionStatus {
         env!("CARGO_PKG_VERSION"),
     );
 
-    if let Ok(Some(_)) = informer.check_version() {
-        return VersionStatus::OutDated;
+    if let Ok(Some(ver)) = informer.check_version() {
+        return VersionStatus::OutDated(ver.to_string());
     } else {
         return VersionStatus::UpToDate;
     }

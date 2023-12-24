@@ -40,4 +40,3 @@ directories = "5.0"
 tempfile = "3.8.1"
 reqwest = "0.11.23"
 update-informer = { version = "1.1", default-features = false, features = ["github", "reqwest", "rustls-tls"] }
-# openssl = { version = "0.10.62", features = ["vendored"] }
