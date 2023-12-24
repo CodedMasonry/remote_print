@@ -71,7 +71,7 @@ impl Default for Interface {
                 .unwrap_or(&"0.0.0.0".parse::<IpAddr>().unwrap()),
             submit_result: None,
             settings,
-            update_status: VersionStatus::OutDated("1.1.1".to_string()), //crate::update::check_oudated(),
+            update_status: crate::update::check_oudated(),
         }
     }
 }

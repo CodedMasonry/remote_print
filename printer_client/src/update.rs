@@ -147,7 +147,7 @@ fn parse_assets(assets: &[serde_json::Value]) -> Vec<Asset> {
 
 pub fn check_oudated() -> VersionStatus {
     let informer = update_informer::new(
-        registry::GitHub,
+        registry::Crates,
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
     );
