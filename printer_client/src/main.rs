@@ -62,6 +62,7 @@ fn main() -> Result<()> {
 }
 
 fn run_gui() -> Result<()> {
+    #[cfg(debug_assertions)]
     println!("Running version: {}", env!("CARGO_PKG_VERSION"));
 
     let options = eframe::NativeOptions {

@@ -509,7 +509,11 @@ impl Interface {
                 response = response.on_hover_text("Please visit releases to update app");
             }
 
-            if response.clicked() {}
+            if response.clicked() {
+                if let Err(e) = update::update() {
+                    self.error = e.to_string();
+                };
+            }
         }
     }
 }

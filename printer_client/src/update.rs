@@ -1,10 +1,12 @@
-use std::process::{Command, Stdio};
+use std::process::{self, Command, Stdio};
 
 use anyhow::anyhow;
+use tracing::{debug, trace};
 use update_informer::{registry, Check};
 
 use crate::app::VersionStatus;
 
+#[derive(Clone, Debug)]
 pub struct Release {
     name: String,
     assets: Vec<Asset>,
@@ -16,9 +18,11 @@ pub struct Asset {
     download_url: String,
 }
 
-fn update() -> Result<(), Box<dyn std::error::Error>> {
+pub fn update() -> Result<(), Box<dyn std::error::Error>> {
     // get the first available release
     let release = get_latest_release("printer_client")?;
+    trace!("{:#?}", release);
+    debug!("Got latest release");
 
     let mut installer = None;
     let mut file_type = None;
@@ -28,8 +32,6 @@ fn update() -> Result<(), Box<dyn std::error::Error>> {
         .into_iter()
         .filter(|val| val.name.contains("msi") || val.name.contains("sh"))
         .filter(|val| !val.name.contains("sha"));
-
-    println!("files: {:#?}", files);
 
     // If the OS matches, installer will be set to it (Compiler flags will dictate this)
     for file in files {
@@ -57,7 +59,7 @@ fn update() -> Result<(), Box<dyn std::error::Error>> {
         Some(val) => val,
         None => {
             return Err(anyhow!(
-            "No installer for supported OS; Check releases to see if you're platform is supported"
+            "No installer for supported OS; Check releases to see if your platform is supported"
         )
             .into())
         }
@@ -66,12 +68,15 @@ fn update() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut installed_update = tempfile::Builder::new()
         .prefix("printer_client")
-        .suffix(file_type.unwrap())
+        .suffix(&format!(".{}", file_type.unwrap()))
         .tempfile()?;
+    debug!("Temporary file created");
     let mut response = reqwest::blocking::get(installer.download_url)?;
+    debug!("Fetched response");
 
     // Directly read response to
     std::io::copy(&mut response, &mut installed_update)?;
+    debug!("Copied file to file");
 
     if !response.status().is_success() {
         return Err(anyhow!("Failed to download update installer").into());
@@ -83,23 +88,32 @@ fn update() -> Result<(), Box<dyn std::error::Error>> {
             .arg("/i")
             .arg(installed_update.path())
             .spawn()?;
+
+        process::exit(0);
     } else if cfg!(target_os = "linux") {
         Command::new("sh")
             .arg(installed_update.path())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?;
+
+        process::exit(0)
     }
 
     Ok(())
 }
 
-fn get_latest_release(name: &str) -> Result<Release, Box<dyn std::error::Error>> {
+pub fn get_latest_release(name: &str) -> Result<Release, Box<dyn std::error::Error>> {
     let url = format!(
         "https://api.github.com/repos/{}/{}/releases",
         "CodedMasonry", "remote_print"
     );
-    let resp = reqwest::blocking::Client::new().get(url).send()?;
+    let resp = reqwest::blocking::Client::new()
+        .get(url)
+        .header("Accept", "application/vnd.github.v3+json")
+        .header("User-Agent", "remote_print")
+        .send()?;
+    debug!("Got update API response");
 
     let binding = resp.json::<serde_json::Value>()?;
     let releases = match binding.as_array() {
@@ -114,7 +128,7 @@ fn get_latest_release(name: &str) -> Result<Release, Box<dyn std::error::Error>>
         .unwrap();
 
     return Ok(Release {
-        name: release["name"].to_string(),
+        name: release["name"].to_string().replace("\"", ""),
         assets: parse_assets(release["assets"].as_array().unwrap()),
     });
 }
@@ -123,8 +137,8 @@ fn parse_assets(assets: &[serde_json::Value]) -> Vec<Asset> {
     let mut result = Vec::new();
     for asset in assets {
         result.push(Asset {
-            name: asset["name"].to_string(),
-            download_url: asset["url"].to_string(),
+            name: asset["name"].to_string().replace("\"", ""),
+            download_url: asset["url"].to_string().replace("\"", ""),
         })
     }
 
