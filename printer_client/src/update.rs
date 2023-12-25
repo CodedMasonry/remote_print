@@ -77,7 +77,7 @@ pub fn update() -> Result<(), Box<dyn std::error::Error>> {
         return Err(anyhow!("Failed to download update installer: {}", status.as_str()).into());
     }
 
-    // Handle the installer to run
+    // Handle the installer to run.
     if cfg!(target_os = "windows") {
         println!("{:#?}", path);
         fs::write(path.clone(), response.bytes()?)?;
