@@ -26,7 +26,7 @@ anyhow = "1.0.75"
 chrono = { version = "0.4.31", features = ["serde"] }
 clap = { version = "4.4.6", features = ["derive"] }
 directories = "5.0"
-inquire = "0.6.2"
+inquire = "0.7.1"
 lazy_static = "1.4.0"
 orion = { version = "0.17.6", features = ["serde"] }
 quinn = "0.10.2"
