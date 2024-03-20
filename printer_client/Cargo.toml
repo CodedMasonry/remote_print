@@ -38,6 +38,6 @@ uuid = { version = "1.5.0", features = ["v4", "serde"] }
 inquire = "0.6.2"
 directories = "5.0"
 tempfile = "3.8.1"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 update-informer = { version = "1.1.0" }
 semver = { version = "1.0.20", features = ["serde"] }
