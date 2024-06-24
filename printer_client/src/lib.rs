@@ -1,10 +1,10 @@
 use std::{
+    ffi::OsStr,
     fs, io,
     net::{SocketAddr, ToSocketAddrs},
     path::PathBuf,
     str::FromStr,
     sync::Arc,
-    time::Duration, ffi::OsStr,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -14,7 +14,7 @@ use include_dir::{include_dir, Dir};
 use inquire;
 use quinn::{self, Connection, Endpoint};
 use rustls::Certificate;
-use tokio::{fs::File, io::AsyncReadExt, time::timeout};
+use tokio::{fs::File, io::AsyncReadExt};
 use tracing::{debug, error, info, info_span, Instrument};
 use url::Url;
 use uuid::Uuid;
@@ -131,7 +131,10 @@ pub async fn send_file(
     let headers = Vec::from([
         format!("POST {:?}", file.file_name().unwrap()),
         format!("Content-Length: {}", file.metadata().unwrap().len()),
-        format!("Extension: {}", file.extension().and_then(OsStr::to_str).unwrap()),
+        format!(
+            "Extension: {}",
+            file.extension().and_then(OsStr::to_str).unwrap()
+        ),
         format!("Session: {}", session.id),
         format!("\r\n"),
     ])
@@ -153,8 +156,7 @@ pub async fn send_file(
 
     // Establish connection
     eprintln!("Connecting to {host} at {remote}");
-    let timelimit = Duration::from_secs(5);
-    let conn = timeout(timelimit, establish_conn(endpoint.clone(), remote, host)).await??;
+    let conn = establish_conn(endpoint.clone(), remote, host).await?;
 
     // Parse Reader & Writer
     let (mut send, mut recv) = conn
