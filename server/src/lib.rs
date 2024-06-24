@@ -36,7 +36,7 @@ lazy_static! {
 impl Session {
     pub fn new() -> Self {
         Session {
-            expiratrion: Utc::now() + Duration::hours(1),
+            expiratrion: Utc::now() + Duration::hours(4),
         }
     }
 }

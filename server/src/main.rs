@@ -88,7 +88,7 @@ async fn run(args: Args) -> Result<()> {
 
     let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(server_crypto));
     let transfer_config = Arc::get_mut(&mut server_config.transport).unwrap();
-    transfer_config.max_concurrent_uni_streams(5_u8.into());
+    transfer_config.max_concurrent_uni_streams(8_u8.into());
     server_config.use_retry(true);
 
     let endpoint = quinn::Endpoint::server(server_config, args.listen)?;
@@ -280,7 +280,7 @@ async fn print_file(
             Ok(output) => output,
             Err(_) => {
                 Command::new("lp")
-                    .arg(dir)
+                    .arg(dir.clone())
                     .arg("-d")
                     .arg(printer.as_ref().unwrap())
                     .arg("-oColorModel=cym")
@@ -296,7 +296,7 @@ async fn print_file(
             Ok(o) => o,
             Err(_) => {
                 Command::new("lp")
-                    .arg(dir)
+                    .arg(dir.clone())
                     .arg("-oColorModel=cym")
                     .arg("-o number-up=1")
                     .output()
@@ -307,8 +307,10 @@ async fn print_file(
 
     // If success, return done, else, return output.
     if result.status.success() {
+        tokio::fs::remove_file(dir).await?;
         Ok(b"done".to_vec())
     } else {
+        tokio::fs::remove_file(dir).await?;
         let err = String::from_utf8(result.stderr)?;
         // If no printer was found, notify User
         if err.contains("not exist") {
