@@ -19,7 +19,7 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Upload to remote printer
+    /// Upload to remote printer.
     Upload {
         url: Url,
 

@@ -37,7 +37,7 @@ struct Args {
     #[arg(short, long)]
     printer: Option<String>,
 
-    /// Reset password
+    /// Reset password.
     #[arg(long)]
     reset_password: bool,
 }
