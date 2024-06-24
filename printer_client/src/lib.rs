@@ -5,6 +5,7 @@ use std::{
     path::PathBuf,
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -14,7 +15,7 @@ use include_dir::{include_dir, Dir};
 use inquire;
 use quinn::{self, Connection, Endpoint};
 use rustls::Certificate;
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{fs::File, io::AsyncReadExt, time::timeout};
 use tracing::{debug, error, info, info_span, Instrument};
 use url::Url;
 use uuid::Uuid;
@@ -156,7 +157,11 @@ pub async fn send_file(
 
     // Establish connection
     eprintln!("Connecting to {host} at {remote}");
-    let conn = establish_conn(endpoint.clone(), remote, host).await?;
+    let conn = timeout(
+        Duration::from_secs(15),
+        establish_conn(endpoint.clone(), remote, host),
+    )
+    .await??;
 
     // Parse Reader & Writer
     let (mut send, mut recv) = conn
