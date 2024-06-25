@@ -41,7 +41,7 @@ on:
   pull_request:
   push:
     tags:
-      - '**[0-9]+.[0-9]+.[0-9]+*'
+      - "**[0-9]+.[0-9]+.[0-9]+*"
 
 jobs:
   # Run 'cargo dist plan' (or host) to determine what tasks we need to do
@@ -54,11 +54,12 @@ jobs:
       publishing: ${{ !github.event.pull_request }}
     env:
       GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-      PKG_CONFIG_PATH: /usr/local
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: stupid homebrew
+        run: NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
       - name: Install cargo-dist
         # we specify bash to get pipefail; it guards against the `curl` command
         # failing. otherwise `sh` won't catch that `curl` returned non-0
@@ -105,7 +106,6 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
-      PKG_CONFIG_PATH: /usr/local
     steps:
       - name: enable windows longpaths
         run: |
@@ -117,6 +117,8 @@ jobs:
         with:
           key: ${{ join(matrix.targets, '-') }}
           cache-provider: ${{ matrix.cache_provider }}
+      - name: stupid homebrew
+        run: NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
       # Get the dist-manifest
@@ -164,11 +166,12 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
-      PKG_CONFIG_PATH: /usr/local
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: stupid homebrew
+        run: NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
       - name: Install cargo-dist
         shell: bash
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.16.0/cargo-dist-installer.sh | sh"
